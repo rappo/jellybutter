@@ -31,7 +31,8 @@ jobs:
         run: |
           VERSION=$(node -p "require('./meta.json').version")
           ZIP="jellyfin-plugin-milkdrop_${VERSION}.zip"
-          (cd dist && rm -f "../${ZIP}" && zip -j "../${ZIP}" Jellyfin.Plugin.Milkdrop.dll meta.json)
+          rm -f "${ZIP}"
+          node .forgejo/scripts/make-zip.js "${ZIP}" dist/Jellyfin.Plugin.Milkdrop.dll dist/meta.json
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "zip=${ZIP}" >> "$GITHUB_OUTPUT"
           md5sum "${ZIP}"

@@ -8,7 +8,7 @@
     <style>
         .milkdrop-help { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.3em; height: 1.3em; margin-left: .4em; border-radius: 50%; border: 1px solid currentColor; font-size: .8em; line-height: 1; opacity: .7; cursor: help; vertical-align: middle; }
         .milkdrop-help:hover, .milkdrop-help:focus { opacity: 1; outline: none; }
-        .milkdrop-help .milkdrop-tip { position: absolute; left: 1.8em; top: 50%; transform: translateY(-50%); z-index: 10; min-width: 16em; max-width: 24em; padding: .5em .7em; border-radius: .4em; background: #202020; color: #fff; font-size: 1.1em; line-height: 1.35; white-space: normal; box-shadow: 0 .2em .8em rgba(0,0,0,.5); display: none; }
+        .milkdrop-help .milkdrop-tip { position: absolute; right: 0; top: 1.7em; z-index: 10; width: max-content; max-width: min(24em, 70vw); padding: .5em .7em; border-radius: .4em; background: #202020; color: #fff; font-size: 1.1em; font-weight: 400; line-height: 1.35; white-space: normal; box-shadow: 0 .2em .8em rgba(0,0,0,.5); display: none; }
         .milkdrop-help:hover .milkdrop-tip, .milkdrop-help:focus .milkdrop-tip { display: block; }
         .milkdrop-label { display: inline-flex; align-items: center; }
         .milkdrop-version { opacity: .6; font-size: .9em; }
@@ -70,7 +70,7 @@
                     page.querySelector('#milkdropBlendSeconds').value = typeof config.BlendSeconds === 'number' ? config.BlendSeconds : 2.7;
                     Dashboard.hideLoadingMsg();
                 });
-                ApiClient.getPlugins().then(function (plugins) {
+                ApiClient.getJSON(ApiClient.getUrl('Plugins')).then(function (plugins) {
                     var me = (plugins || []).filter(function (p) { return (p.Id || '').replace(/-/g, '') === pluginId.replace(/-/g, ''); })[0];
                     if (me && me.Version) { page.querySelector('#milkdropVersion').textContent = 'v' + me.Version; }
                 }).catch(function () { /* the version is a nicety */ });

@@ -10,8 +10,11 @@
  *   - Watches for jellyfin-web's <audio> element and shows a floating toggle button while a track is loaded.
  *     The button sits inside a positioned wrapper because jellyfin-web's arrow-key (D-pad) focus manager
  *     skips any element whose offsetParent is null, which a fixed-position element's always is.
- *   - On first open, builds the Web Audio graph once per element (source -> analyser -> destination; the
- *     element's output can only be captured once) and lazy-loads the two Butterchurn bundles from the
+ *   - Listens on the element's Web Audio source node. jellyfin-web's own audio player routes the element
+ *     through an AudioContext of its own (a gain node for volume normalization) as playback starts, and an
+ *     element can feed only one MediaElementAudioSourceNode, so createMediaElementSource is wrapped at
+ *     load to capture the context and node whichever side connects first; an element nobody connected
+ *     gets a context of the script's own. On first open it lazy-loads the two Butterchurn bundles from the
  *     plugin, then renders full screen with a random starting preset, auto-cycling, blended changes and
  *     a preset-name flash.
  *   - Hotkeys: v toggles the visualizer, b next preset, n previous preset, Escape closes. Ignored while
@@ -161,10 +164,11 @@
 
     var state = {
         audio: null,            // the <audio> element being watched
-        context: null,          // the one AudioContext
-        sources: null,          // WeakMap<HTMLMediaElement, MediaElementAudioSourceNode>
-        source: null,           // the source node of state.audio
+        tap: null,              // { context, source } of state.audio, see taps
+        ownContext: null,       // the AudioContext for elements nobody else connected
+        engine: null,           // the butterchurn API once loaded
         visualizer: null,
+        visualizerContext: null,
         presets: null,          // { [name]: preset }
         names: [],              // sorted preset names
         index: 0,
@@ -174,6 +178,7 @@
         flashTimer: 0,
         stopTimer: 0,
         libs: null,             // Promise for the bundles
+        unsupported: false,     // set once the browser proved it has no WebGL 2
         lastFocus: null
     };
 
@@ -289,7 +294,7 @@
             audioEvents.forEach(function (ev) { state.audio.removeEventListener(ev, onAudioEvent); });
         }
         state.audio = audio;
-        state.source = null;
+        state.tap = null;
         if (audio) {
             audioEvents.forEach(function (ev) { audio.addEventListener(ev, onAudioEvent); });
             if (state.open) { connect(); }
@@ -298,7 +303,7 @@
     }
 
     function onAudioEvent() {
-        var loaded = MilkdropCore.isTrackLoaded(state.audio);
+        var loaded = MilkdropCore.isTrackLoaded(state.audio) && !state.unsupported;
         if (loaded) {
             clearTimeout(state.stopTimer);
             state.stopTimer = 0;
@@ -328,40 +333,58 @@
 
     // ---- Web Audio ----------------------------------------------------------------------------------------
 
-    function ensureContext() {
-        if (!state.context) {
-            var Ctor = window.AudioContext || window.webkitAudioContext;
-            state.context = new Ctor();
-            state.sources = new WeakMap();
-        }
-        if (state.context.state === 'suspended') {
-            state.context.resume().catch(function () { /* resumed on the next gesture */ });
-        }
-        return state.context;
-    }
+    // HTMLMediaElement -> { context, source }: every MediaElementAudioSourceNode made on this page, by
+    // jellyfin-web or by this script. Recorded by the wrap below, which is installed now, before
+    // jellyfin-web's deferred bundles run, so its audio player's own connection is seen too.
+    var taps = new WeakMap();
 
-    /** Routes the current element through the graph once; a second call for the same element reuses it. */
+    (function captureSources() {
+        var Ctor = window.AudioContext || window.webkitAudioContext;
+        var proto = Ctor && Ctor.prototype;
+        if (!proto || typeof proto.createMediaElementSource !== 'function') { return; }
+        var original = proto.createMediaElementSource;
+        proto.createMediaElementSource = function (element) {
+            var node = original.apply(this, arguments);
+            if (element && typeof element === 'object') { taps.set(element, { context: this, source: node }); }
+            return node;
+        };
+    })();
+
+    function noop() { /* nothing */ }
+
+    /** Finds or makes the source node of the current element and points the visualizer at it. */
     function connect() {
         var audio = state.audio;
         if (!audio) { return null; }
-        var ctx = ensureContext();
-        var source = state.sources.get(audio);
-        if (!source) {
-            source = ctx.createMediaElementSource(audio);
-            var analyser = ctx.createAnalyser();
-            analyser.fftSize = 2048;
-            source.connect(analyser);
-            analyser.connect(ctx.destination);
-            state.sources.set(audio, source);
-        }
-        if (state.source !== source) {
-            if (state.visualizer && state.source) {
-                try { state.visualizer.disconnectAudio(state.source); } catch (e) { /* already gone */ }
+        var tap = taps.get(audio);
+        if (!tap) {
+            // Nobody connected this element (normalization off, or a replaced element): route it through a
+            // context of our own, to the speakers as before. The wrap records it.
+            if (!state.ownContext) {
+                var Ctor = window.AudioContext || window.webkitAudioContext;
+                state.ownContext = new Ctor();
             }
-            state.source = source;
-            if (state.visualizer) { state.visualizer.connectAudio(source); }
+            var source = state.ownContext.createMediaElementSource(audio);
+            source.connect(state.ownContext.destination);
+            tap = taps.get(audio) || { context: state.ownContext, source: source };
+            taps.set(audio, tap);
         }
-        return source;
+        if (tap.context.state === 'suspended') {
+            tap.context.resume().catch(noop);
+        }
+        if (state.tap !== tap) {
+            if (state.visualizer && state.tap) {
+                try { state.visualizer.disconnectAudio(state.tap.source); } catch (e) { /* already gone */ }
+            }
+            state.tap = tap;
+            if (state.visualizer && state.visualizerContext !== tap.context) {
+                // Butterchurn's analysers live in one AudioContext; a node from another needs a new
+                // visualizer, on a fresh canvas since a WebGL context cannot be handed over.
+                dropVisualizer();
+            }
+            if (state.visualizer) { state.visualizer.connectAudio(tap.source); }
+        }
+        return tap;
     }
 
     // ---- Butterchurn ---------------------------------------------------------------------------------------
@@ -383,8 +406,14 @@
                 window.butterchurn ? Promise.resolve() : loadScript(MilkdropCore.assetUrl(assetBase, 'butterchurn.js', version)),
                 window.butterchurnPresets ? Promise.resolve() : loadScript(MilkdropCore.assetUrl(assetBase, 'butterchurn-presets.js', version))
             ]).then(function () {
-                if (!window.butterchurn || !window.butterchurnPresets) { throw new Error('Milkdrop: Butterchurn did not define itself'); }
-                state.presets = window.butterchurnPresets.getPresets();
+                // The UMD bundles expose the ES module namespace: the API is its default export.
+                var engine = window.butterchurn && (window.butterchurn.default || window.butterchurn);
+                var presets = window.butterchurnPresets && (window.butterchurnPresets.default || window.butterchurnPresets);
+                if (!engine || typeof engine.createVisualizer !== 'function' || !presets || typeof presets.getPresets !== 'function') {
+                    throw new Error('Milkdrop: the Butterchurn bundles did not define createVisualizer and getPresets');
+                }
+                state.engine = engine;
+                state.presets = presets.getPresets();
                 state.names = Object.keys(state.presets).sort();
             }, function (err) {
                 state.libs = null;
@@ -402,13 +431,24 @@
         var v = viewport();
         ui.canvas.width = Math.round(v.w * v.dpr);
         ui.canvas.height = Math.round(v.h * v.dpr);
-        state.visualizer = window.butterchurn.createVisualizer(state.context, ui.canvas, {
+        state.visualizerContext = state.tap.context;
+        state.visualizer = state.engine.createVisualizer(state.visualizerContext, ui.canvas, {
             width: v.w,
             height: v.h,
             pixelRatio: v.dpr,
             textureRatio: 1
         });
-        if (state.source) { state.visualizer.connectAudio(state.source); }
+        state.visualizer.connectAudio(state.tap.source);
+    }
+
+    function dropVisualizer() {
+        state.visualizer = null;
+        state.visualizerContext = null;
+        var fresh = document.createElement('canvas');
+        fresh.className = ui.canvas.className;
+        ui.overlay.replaceChild(fresh, ui.canvas);
+        ui.canvas = fresh;
+        ui.canvas.addEventListener('click', function () { showControls(); });
     }
 
     function resize() {
@@ -456,18 +496,31 @@
     var opening = false;
 
     function open() {
-        if (state.open || opening || !state.audio) { return; }
+        if (state.open || opening || !state.audio || state.unsupported) { return; }
         opening = true;
-        // The context is created inside the gesture, as autoplay policy requires.
-        connect();
+        try {
+            // Any context this makes is created inside the gesture, as autoplay policy requires.
+            connect();
+        } catch (err) {
+            opening = false;
+            console.error('[Milkdrop] could not attach to the audio element', err);
+            return;
+        }
         ensureLibs().then(function () {
             opening = false;
-            if (!state.audio) { return; }
+            if (!state.audio || !state.tap) { return; }
             state.open = true;
             state.lastFocus = document.activeElement;
             ui.overlay.classList.add('milkdrop-open');
             ui.toggle.setAttribute('aria-pressed', 'true');
-            if (!state.visualizer) { createVisualizer(); } else { resize(); }
+            try {
+                if (!state.visualizer) { createVisualizer(); } else { resize(); }
+            } catch (err) {
+                // Butterchurn needs WebGL 2; a browser without it throws inside createVisualizer. Say so
+                // once where the user is looking, then stop offering the button for this page.
+                unsupported(err);
+                return;
+            }
             loadPreset(MilkdropCore.randomIndex(state.names.length, -1), 0);
             render();
             showControls();
@@ -476,6 +529,18 @@
             opening = false;
             console.error('[Milkdrop]', err);
         });
+    }
+
+    function unsupported(err) {
+        console.error('[Milkdrop] this browser cannot run the visualizer (WebGL 2 is required)', err);
+        state.unsupported = true;
+        ui.toast.textContent = 'The visualizer needs WebGL 2, which this browser does not provide.';
+        ui.toast.classList.add('milkdrop-shown');
+        setTimeout(function () {
+            ui.toast.classList.remove('milkdrop-shown');
+            close();
+            ui.toggleWrap.classList.remove('milkdrop-visible');
+        }, NAME_FLASH_MS);
     }
 
     function close() {

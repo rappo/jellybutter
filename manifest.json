@@ -3,6 +3,14 @@
         "guid": "7efeb814-3e67-466d-a2a1-6842ef86a500",
         "versions": [
             {
+                "version": "1.0.1.0",
+                "changelog": "1.0.1.0 - Settings page: the version label works and help tooltips stay inside the window.\n1.0.0.0 - First release: Butterchurn visualizer with auto-cycling presets, hotkeys, a focusable toggle button, and web-player audio on Jellyfin Desktop.",
+                "targetAbi": "12.2.0.0",
+                "sourceUrl": "http://argos.lan.rappo.me:3210/rappo/jellyfin-plugin-milkdrop/releases/download/v1.0.1.0/jellyfin-plugin-milkdrop_1.0.1.0.zip",
+                "checksum": "79da665e5226a18bb5a30eff43cd17fd",
+                "timestamp": "2026-10-28T01:02:43Z"
+            },
+            {
                 "version": "1.0.0.0",
                 "changelog": "1.0.0.0 - First release: Butterchurn visualizer with auto-cycling presets, hotkeys, a focusable toggle button, and web-player audio on Jellyfin Desktop.",
                 "targetAbi": "12.2.0.0",

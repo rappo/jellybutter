@@ -568,7 +568,7 @@
             loadPreset(MilkdropCore.randomIndex(state.names.length, -1), 0);
             render();
             showControls();
-            ui.next.focus({ preventScroll: true });
+            moveFocus(ui.next);
         }, function (err) {
             opening = false;
             console.error('[Milkdrop]', err);
@@ -599,10 +599,23 @@
         var back = state.lastFocus;
         state.lastFocus = null;
         if (ui.toggleWrap.classList.contains('milkdrop-visible')) {
-            ui.toggle.focus({ preventScroll: true });
+            moveFocus(ui.toggle);
         } else if (back && typeof back.focus === 'function' && document.contains(back)) {
-            back.focus({ preventScroll: true });
+            moveFocus(back);
         }
+    }
+
+    // Focus moves a moment after the action, never inside the key event that caused it: in the TV layout
+    // jellyfin-web clicks the focused element on Enter's keydown and the browser then activates whatever
+    // is focused on the key's own default action, so a focus change inside the handler would hand that
+    // second activation to the newly focused button (Close reopened the visualizer; the toggle stepped
+    // to the next preset).
+    var focusTimer = 0;
+    function moveFocus(el) {
+        clearTimeout(focusTimer);
+        focusTimer = setTimeout(function () {
+            if (el && typeof el.focus === 'function' && document.contains(el)) { el.focus({ preventScroll: true }); }
+        }, 100);
     }
 
     function toggle() {

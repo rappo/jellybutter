@@ -1,1 +1,21 @@
-[]
+[
+    {
+        "guid": "7efeb814-3e67-466d-a2a1-6842ef86a500",
+        "versions": [
+            {
+                "version": "1.0.0.0",
+                "changelog": "1.0.0.0 - First release: Butterchurn visualizer with auto-cycling presets, hotkeys, a focusable toggle button, and web-player audio on Jellyfin Desktop.",
+                "targetAbi": "12.2.0.0",
+                "sourceUrl": "http://argos.lan.rappo.me:3210/rappo/jellyfin-plugin-milkdrop/releases/download/v1.0.0.0/jellyfin-plugin-milkdrop_1.0.0.0.zip",
+                "checksum": "fac1db554c36ac13fe0e7785ee557915",
+                "timestamp": "2026-10-28T00:57:27Z"
+            }
+        ],
+        "name": "Milkdrop Visualizer",
+        "description": "Adds a Butterchurn (MilkDrop 2, WebGL) visualizer to the Jellyfin web client. A floating button appears while music plays; the visualizer opens full screen with random presets that cycle automatically, and keyboard shortcuts (v toggle, b next, n previous, Escape close) that a controller layout can map to. On Jellyfin Desktop, music is routed through the web player so the visualizer can hear it while video stays on mpv. Everything is served by the plugin; nothing is loaded from the internet.",
+        "overview": "A MilkDrop 2 music visualizer (Butterchurn) inside the Jellyfin web client and Jellyfin Desktop.",
+        "owner": "rappo",
+        "category": "General",
+        "imageUrl": ""
+    }
+]

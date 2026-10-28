@@ -63,6 +63,29 @@
             });
         },
 
+        /**
+         * The Jellyfin Desktop device-profile fix-up. The shell's profile describes mpv (every container,
+         * an audio transcoding entry with no container or context), which is wrong for the web player on
+         * two counts: jellyfin-web's universal-audio URL builder dereferences the first audio "Streaming"
+         * transcoding profile and throws when there is none, and the web view cannot decode everything
+         * mpv can. The audio entries (DirectPlay, Transcoding and Codec profiles of type Audio) are taken
+         * from the browser's own profile instead; video, photo and everything else stay the shell's. A
+         * missing browser profile leaves the shell's untouched.
+         */
+        mergeAudioProfile: function (shellProfile, browserProfile) {
+            if (!shellProfile || typeof shellProfile !== 'object' || !browserProfile || typeof browserProfile !== 'object') { return shellProfile; }
+            var isAudio = function (p) { return p && p.Type === 'Audio'; };
+            var notAudio = function (p) { return !isAudio(p); };
+            var merged = {};
+            Object.keys(shellProfile).forEach(function (k) { merged[k] = shellProfile[k]; });
+            ['DirectPlayProfiles', 'TranscodingProfiles', 'CodecProfiles'].forEach(function (key) {
+                var shell = Array.isArray(shellProfile[key]) ? shellProfile[key] : [];
+                var browser = Array.isArray(browserProfile[key]) ? browserProfile[key] : [];
+                merged[key] = shell.filter(notAudio).concat(browser.filter(isAudio));
+            });
+            return merged;
+        },
+
         /** Wraps an index around the preset list. */
         stepIndex: function (index, count, delta) {
             if (!count) { return 0; }
@@ -144,22 +167,34 @@
     })();
     var assetBase = MilkdropCore.assetBase(scriptSrc) || 'Milkdrop/';
 
-    // Jellyfin Desktop: must run now, before jellyfin-web's deferred bundles load its plugins.
+    // Jellyfin Desktop: must run now, before jellyfin-web's deferred bundles load its plugins and ask for
+    // the device profile. Two wraps: the plugin list loses the mpv audio player, and the device profile
+    // gets the browser's audio entries (jellyfin-web hands the shell its own profile builder as the
+    // first argument, which is how the browser's profile is obtained here).
     (function patchNativeShell() {
         var shell = window.NativeShell;
-        if (!shell || typeof shell.getPlugins !== 'function' || shell.__milkdropWrapped) { return; }
-        var original = shell.getPlugins;
+        if (!shell || typeof shell.getPlugins !== 'function' || shell.__milkdropWrapped || !config.desktopWebAudio) { return; }
+        var originalPlugins = shell.getPlugins;
         shell.getPlugins = function () {
-            var list = original.apply(this, arguments);
+            var list = originalPlugins.apply(this, arguments);
             if (list && typeof list.then === 'function') {
                 return list.then(function (resolved) { return MilkdropCore.filterNativePlugins(resolved, config); });
             }
             return MilkdropCore.filterNativePlugins(list, config);
         };
-        shell.__milkdropWrapped = true;
-        if (config.desktopWebAudio) {
-            console.info('[Milkdrop] Jellyfin Desktop: music will play through the web player so the visualizer can hear it.');
+        var host = shell.AppHost;
+        if (host && typeof host.getDeviceProfile === 'function') {
+            var originalProfile = host.getDeviceProfile;
+            host.getDeviceProfile = function (profileBuilder) {
+                var result = originalProfile.apply(this, arguments);
+                var browser = null;
+                try { browser = typeof profileBuilder === 'function' ? profileBuilder({}) : null; } catch (e) { browser = null; }
+                var merge = function (profile) { return MilkdropCore.mergeAudioProfile(profile, browser); };
+                return result && typeof result.then === 'function' ? result.then(merge) : merge(result);
+            };
         }
+        shell.__milkdropWrapped = true;
+        console.info('[Milkdrop] Jellyfin Desktop: music will play through the web player so the visualizer can hear it.');
     })();
 
     var state = {
@@ -427,18 +462,29 @@
         return { w: Math.max(1, window.innerWidth), h: Math.max(1, window.innerHeight), dpr: window.devicePixelRatio || 1 };
     }
 
+    // Butterchurn's width and height are the canvas buffer in device pixels: its final pass sets the
+    // viewport to exactly that, so a buffer larger than width x height is only partly drawn (seen in
+    // Jellyfin Desktop at a 1.4 scale factor). Its pixelRatio only scales the internal textures. The
+    // buffer is sized to the viewport at the device's pixel ratio for a sharp image and the textures match
+    // it one to one.
     function createVisualizer() {
-        var v = viewport();
-        ui.canvas.width = Math.round(v.w * v.dpr);
-        ui.canvas.height = Math.round(v.h * v.dpr);
+        var size = sizeCanvas();
         state.visualizerContext = state.tap.context;
         state.visualizer = state.engine.createVisualizer(state.visualizerContext, ui.canvas, {
-            width: v.w,
-            height: v.h,
-            pixelRatio: v.dpr,
+            width: size.w,
+            height: size.h,
+            pixelRatio: 1,
             textureRatio: 1
         });
         state.visualizer.connectAudio(state.tap.source);
+    }
+
+    function sizeCanvas() {
+        var v = viewport();
+        var size = { w: Math.round(v.w * v.dpr), h: Math.round(v.h * v.dpr) };
+        ui.canvas.width = size.w;
+        ui.canvas.height = size.h;
+        return size;
     }
 
     function dropVisualizer() {
@@ -453,10 +499,8 @@
 
     function resize() {
         if (!state.open || !state.visualizer) { return; }
-        var v = viewport();
-        ui.canvas.width = Math.round(v.w * v.dpr);
-        ui.canvas.height = Math.round(v.h * v.dpr);
-        state.visualizer.setRendererSize(v.w, v.h, { pixelRatio: v.dpr, textureRatio: 1 });
+        var size = sizeCanvas();
+        state.visualizer.setRendererSize(size.w, size.h);
     }
 
     function loadPreset(index, blend) {
@@ -582,6 +626,8 @@
     function start() {
         buildUi();
         startObserver();
+        // A read-only handle for diagnosing a client in the field (devtools, or a remote-debugging port).
+        window.jfMilkdrop = { version: version, config: config, core: MilkdropCore, state: state };
     }
 
     if (document.readyState === 'loading') {

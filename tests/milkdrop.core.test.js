@@ -90,3 +90,41 @@ test('assetBase and assetUrl: bundles resolve beside the script with the same ve
     assert.equal(core.assetUrl('http://h/Milkdrop/', 'butterchurn.js', '1.0.0.0'), 'http://h/Milkdrop/butterchurn.js?v=1.0.0.0');
     assert.equal(core.assetUrl('/Milkdrop/', 'butterchurn-presets.js', 'a b'), '/Milkdrop/butterchurn-presets.js?v=a%20b');
 });
+
+test('mergeAudioProfile: audio entries come from the browser, everything else stays the shell\'s', () => {
+    // Shapes as seen in Jellyfin Desktop 2.0.0 and jellyfin-web 12.2: the shell's audio transcoding entry has
+    // no Container or Context, which is what crashed jellyfin-web's universal-audio URL builder.
+    const shell = {
+        Name: 'Jellyfin Desktop', MaxStaticBitrate: 1e9,
+        DirectPlayProfiles: [{ Type: 'Audio' }, { Type: 'Photo' }, { Type: 'Video' }],
+        TranscodingProfiles: [{ Type: 'Audio' }, { Type: 'Video', Container: 'ts', Protocol: 'hls' }, { Type: 'Photo', Container: 'jpeg' }],
+        CodecProfiles: [{ Type: 'Video' }],
+        SubtitleProfiles: [{ Format: 'srt' }]
+    };
+    const browser = {
+        DirectPlayProfiles: [{ Type: 'Audio', Container: 'mp3,flac,ogg' }, { Type: 'Video', Container: 'mp4' }],
+        TranscodingProfiles: [{ Type: 'Audio', Container: 'mp3', Context: 'Streaming', AudioCodec: 'mp3', Protocol: 'http' }, { Type: 'Video', Container: 'ts', Context: 'Streaming' }],
+        CodecProfiles: [{ Type: 'Audio', Codec: 'flac' }, { Type: 'VideoAudio', Codec: 'aac' }]
+    };
+    const merged = core.mergeAudioProfile(shell, browser);
+    assert.deepEqual(merged.DirectPlayProfiles, [{ Type: 'Photo' }, { Type: 'Video' }, { Type: 'Audio', Container: 'mp3,flac,ogg' }]);
+    assert.deepEqual(merged.TranscodingProfiles, [{ Type: 'Video', Container: 'ts', Protocol: 'hls' }, { Type: 'Photo', Container: 'jpeg' }, { Type: 'Audio', Container: 'mp3', Context: 'Streaming', AudioCodec: 'mp3', Protocol: 'http' }]);
+    assert.deepEqual(merged.CodecProfiles, [{ Type: 'Video' }, { Type: 'Audio', Codec: 'flac' }]);
+    assert.equal(merged.Name, 'Jellyfin Desktop');
+    assert.equal(merged.MaxStaticBitrate, 1e9);
+    assert.deepEqual(merged.SubtitleProfiles, [{ Format: 'srt' }]);
+    // The shell's object is not mutated.
+    assert.equal(shell.TranscodingProfiles.length, 3);
+    assert.equal(shell.TranscodingProfiles[0].Type, 'Audio');
+    // jellyfin-web's builder would now find an audio Streaming transcoding profile.
+    assert.ok(merged.TranscodingProfiles.some((p) => p.Type === 'Audio' && p.Context === 'Streaming'));
+});
+
+test('mergeAudioProfile: without a browser profile or a shell profile, the shell profile is returned as is', () => {
+    const shell = { DirectPlayProfiles: [{ Type: 'Audio' }] };
+    assert.equal(core.mergeAudioProfile(shell, null), shell);
+    assert.equal(core.mergeAudioProfile(shell, undefined), shell);
+    assert.equal(core.mergeAudioProfile(null, { DirectPlayProfiles: [] }), null);
+    // Missing arrays on either side are tolerated.
+    assert.deepEqual(core.mergeAudioProfile({}, {}).TranscodingProfiles, []);
+});

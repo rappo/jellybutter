@@ -4,6 +4,8 @@ A [Butterchurn](https://github.com/jberg/butterchurn) (MilkDrop 2, WebGL) music 
 Jellyfin web client, and inside Jellyfin Desktop. One server plugin, installed once from a plugin
 repository, updated from there; nothing to install on any client.
 
+![The visualizer full screen in Jellyfin Desktop, with the preset controls at the bottom right](docs/visualizer.png)
+
 ## What it does
 
 - A round **visualizer button** appears at the bottom right whenever a track is loaded in the web player.

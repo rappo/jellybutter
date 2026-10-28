@@ -93,8 +93,28 @@ The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_T
   `offsetParent === null` as "not focusable", and a `position: fixed` element's offsetParent is always
   null; a child of a fixed wrapper has the wrapper as offsetParent. Making the button itself fixed breaks
   D-pad navigation.
-- **One Web Audio source per `<audio>` element**, kept in a WeakMap: `createMediaElementSource` throws on a
-  second call for the same element, and jellyfin-web reuses one element across tracks but may replace it.
+- **jellyfin-web connects the `<audio>` element itself** (its audio player makes an AudioContext with a gain
+  node for volume normalization as playback starts), and an element can feed only one
+  MediaElementAudioSourceNode. The script wraps `AudioContext.prototype.createMediaElementSource` at load,
+  before jellyfin-web's deferred bundles run, and records every element's context and source node in a
+  WeakMap; Butterchurn is created in that same context and connected to that node. An element nobody
+  connected gets a context of the script's own. There is no separate analyser: Butterchurn brings its own.
+- **Jellyfin Desktop needs two wraps, not one.** Besides dropping `mpvAudioPlayer` from
+  `NativeShell.getPlugins()`, `NativeShell.AppHost.getDeviceProfile` is wrapped: the shell's profile
+  describes mpv and its audio transcoding entry has no Container or Context, and jellyfin-web's
+  universal-audio URL builder throws on it ("Playback Error" with no request reaching the server). The
+  audio-typed DirectPlay, Transcoding and Codec profiles are replaced by the browser's own, obtained from the
+  profile builder jellyfin-web passes as the first argument (`mergeAudioProfile`).
+- **Butterchurn's `width`/`height` are the canvas buffer in device pixels** (its last pass sets the viewport
+  to exactly that), so the buffer is sized to the viewport times `devicePixelRatio` and those numbers are
+  passed with `pixelRatio: 1`. Passing CSS pixels with `pixelRatio: devicePixelRatio` draws only the
+  bottom-left part of the canvas on a scaled display (seen at 1.4x in Jellyfin Desktop).
+- **Assets are cached immutable for a year under `?v=<version>`**, so during development a browser keeps
+  the old script until the version changes: use a fresh origin (127.0.0.2, 127.0.0.3, ...) per build, or a
+  devtools reload that bypasses the cache (`Page.reload` with `ignoreCache`; QtWebEngine ignores
+  `Network.clearBrowserCache` for these). A release never has this problem: CI refuses to republish a version.
+- **`window.jfMilkdrop`** is a read-only diagnostic handle (version, config, core helpers, live state) for a
+  devtools session on a client in the field.
 - **Hotkeys use `window` keydown in the capture phase** with `stopImmediatePropagation`, so `Escape` closes
   the visualizer instead of being jellyfin-web's "back".
 - **Track changes do not close the visualizer:** the audio element is emptied and reloaded between tracks,
@@ -104,6 +124,17 @@ The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_T
   plugin update replaces a cached page.
 
 ## Lessons
+
+- 2026-10-27: Jellyfin Desktop can be driven headlessly for verification: `flatpak run
+  org.jellyfin.JellyfinDesktop --create-profile <name>`, then `--profile <name> --remote-debugging-port 9222
+  --windowed --log-level debug`; a second instance on its own profile leaves the user's running one alone.
+  The profile's log is under `~/.var/app/org.jellyfin.JellyfinDesktop/data/jellyfin-desktop/profiles/<id>/logs/`
+  and forwards the page's console. Confirmed there: `NativeShell.getPlugins()` loses `mpvAudioPlayer`, an
+  `<audio>` element plays the track, the toggle appears, WebGL 2 renders full screen, v/b/n/Escape work.
+- 2026-10-27: The desktop app's built-in browser pane has no WebGL at all and the laptop's audio sink was
+  `auto_null`, so neither rendering nor audible output can be verified there; Chromium stalls a media
+  element routed through Web Audio when the audio device fails ("The AudioContext encountered an error
+  from the audio device"). Not a plugin fault: mpv in the same session logged `ao/pulse: Init failed`.
 
 - 2026-10-27: jellyfin-web 12.2's `htmlAudioPlayer` creates `<audio class="mediaPlayerAudio">` on the body
   and keeps it; `stop()` pauses and may remove it. Watching by selector plus a MutationObserver covers both.

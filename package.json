@@ -5,7 +5,7 @@
   "description": "Pins the Butterchurn bundles the plugin embeds; the plugin itself is built by dotnet.",
   "license": "MIT",
   "scripts": {
-    "test": "node --test tests/"
+    "test": "node --test \"tests/**/*.test.js\""
   },
   "dependencies": {
     "butterchurn": "2.6.7",

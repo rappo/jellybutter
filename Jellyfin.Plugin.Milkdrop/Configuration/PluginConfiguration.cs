@@ -17,6 +17,10 @@ public class PluginConfiguration : BasePluginConfiguration
         DesktopWebAudio = true;
         CycleSeconds = 30;
         BlendSeconds = 2.7;
+        ControlButton = true;
+        FloatingButton = true;
+        DefaultView = "visualizer";
+        LyricsSize = "medium";
     }
 
     /// <summary>
@@ -40,4 +44,27 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets how many seconds a preset change blends over.
     /// </summary>
     public double BlendSeconds { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the Now Playing control row gets a visualizer button, between
+    /// Lyrics and Shuffle.
+    /// </summary>
+    public bool ControlButton { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether a floating visualizer button is shown while a track is loaded,
+    /// on pages without the Now Playing control row.
+    /// </summary>
+    public bool FloatingButton { get; set; }
+
+    /// <summary>
+    /// Gets or sets which view the visualizer opens in: "visualizer" or "lyrics" (the visualizer with the
+    /// track's lyrics over it).
+    /// </summary>
+    public string DefaultView { get; set; }
+
+    /// <summary>
+    /// Gets or sets the lyrics text size: "small", "medium" or "large".
+    /// </summary>
+    public string LyricsSize { get; set; }
 }

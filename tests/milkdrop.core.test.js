@@ -4,13 +4,21 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const core = require('../Jellyfin.Plugin.Milkdrop/Web/milkdrop.js');
 
+const DEFAULTS = { desktopWebAudio: true, cycleSeconds: 30, blendSeconds: 2.7, controlButton: true, floatingButton: true, defaultView: 'visualizer', lyricsSize: 'medium' };
+
 test('parseConfig: fills defaults for a missing, malformed or partial attribute', () => {
-    assert.deepEqual(core.parseConfig(null), { desktopWebAudio: true, cycleSeconds: 30, blendSeconds: 2.7 });
-    assert.deepEqual(core.parseConfig('not json'), { desktopWebAudio: true, cycleSeconds: 30, blendSeconds: 2.7 });
-    assert.deepEqual(core.parseConfig('{"cycleSeconds":0}'), { desktopWebAudio: true, cycleSeconds: 0, blendSeconds: 2.7 });
-    assert.deepEqual(core.parseConfig('{"desktopWebAudio":false,"cycleSeconds":45,"blendSeconds":1.5}'), { desktopWebAudio: false, cycleSeconds: 45, blendSeconds: 1.5 });
+    assert.deepEqual(core.parseConfig(null), DEFAULTS);
+    assert.deepEqual(core.parseConfig('not json'), DEFAULTS);
+    assert.deepEqual(core.parseConfig('{"cycleSeconds":0}'), { ...DEFAULTS, cycleSeconds: 0 });
+    assert.deepEqual(core.parseConfig('{"desktopWebAudio":false,"cycleSeconds":45,"blendSeconds":1.5,"controlButton":false,"floatingButton":false,"defaultView":"lyrics","lyricsSize":"large"}'),
+        { desktopWebAudio: false, cycleSeconds: 45, blendSeconds: 1.5, controlButton: false, floatingButton: false, defaultView: 'lyrics', lyricsSize: 'large' });
     assert.equal(core.parseConfig('{"cycleSeconds":-5,"blendSeconds":"x"}').cycleSeconds, 30);
     assert.equal(core.parseConfig('{"cycleSeconds":-5,"blendSeconds":"x"}').blendSeconds, 2.7);
+    // Unknown choices fall back; casing is forgiven.
+    assert.equal(core.parseConfig('{"defaultView":"karaoke"}').defaultView, 'visualizer');
+    assert.equal(core.parseConfig('{"defaultView":"Lyrics"}').defaultView, 'lyrics');
+    assert.equal(core.parseConfig('{"lyricsSize":"huge"}').lyricsSize, 'medium');
+    assert.equal(core.parseConfig('{"controlButton":"no"}').controlButton, true);
 });
 
 test('filterNativePlugins: drops only the mpv audio player, only when the setting is on', () => {
@@ -49,7 +57,10 @@ test('randomIndex never repeats the current preset when there is a choice', () =
     assert.equal(core.randomIndex(10, -1, () => 0), 0);
 });
 
-test('hotkeyFor: v toggles while a track is loaded or the overlay is open; b, n and Escape only while open', () => {
+test('hotkeyFor: v toggles while a track is loaded or the overlay is open; b, n, l and Escape only while open', () => {
+    assert.equal(core.hotkeyFor('l', true, true), 'lyrics');
+    assert.equal(core.hotkeyFor('L', true, false), 'lyrics');
+    assert.equal(core.hotkeyFor('l', false, true), null);
     assert.equal(core.hotkeyFor('v', false, true), 'toggle');
     assert.equal(core.hotkeyFor('V', true, false), 'toggle');
     assert.equal(core.hotkeyFor('v', false, false), null);
@@ -127,4 +138,81 @@ test('mergeAudioProfile: without a browser profile or a shell profile, the shell
     assert.equal(core.mergeAudioProfile(null, { DirectPlayProfiles: [] }), null);
     // Missing arrays on either side are tolerated.
     assert.deepEqual(core.mergeAudioProfile({}, {}).TranscodingProfiles, []);
+});
+
+test('buttonPlacement: the row button on the Now Playing page, the floating button elsewhere', () => {
+    const both = { controlButton: true, floatingButton: true };
+    assert.deepEqual(core.buttonPlacement(both, true, false, true), { control: true, floating: false });
+    assert.deepEqual(core.buttonPlacement(both, true, false, false), { control: false, floating: true });
+    // No track, or a browser without WebGL 2: nothing.
+    assert.deepEqual(core.buttonPlacement(both, false, false, true), { control: false, floating: false });
+    assert.deepEqual(core.buttonPlacement(both, true, true, true), { control: false, floating: false });
+    // The row button switched off: the floating one covers the Now Playing page too.
+    assert.deepEqual(core.buttonPlacement({ controlButton: false, floatingButton: true }, true, false, true), { control: false, floating: true });
+    // The floating button switched off: nothing outside the Now Playing page.
+    assert.deepEqual(core.buttonPlacement({ controlButton: true, floatingButton: false }, true, false, false), { control: false, floating: false });
+    assert.deepEqual(core.buttonPlacement({ controlButton: true, floatingButton: false }, true, false, true), { control: true, floating: false });
+    assert.deepEqual(core.buttonPlacement(null, true, false, true), { control: false, floating: false });
+});
+
+test('controlButtonIndex: after Lyrics, else before Shuffle, else at the end', () => {
+    // jellyfin-web 12.2's row: favorite, lyrics, shuffle, repeat.
+    const row = ['btnUserRating autoSize', 'btnLyrics autoSize hide', 'btnShuffleQueue autoSize', 'btnCommand btnRepeat repeatToggleButton autoSize'];
+    assert.equal(core.controlButtonIndex(row), 2);
+    assert.equal(core.controlButtonIndex(['btnUserRating', 'btnShuffleQueue', 'btnRepeat']), 1);
+    assert.equal(core.controlButtonIndex(['btnUserRating', 'btnRepeat']), 2);
+    assert.equal(core.controlButtonIndex([]), 0);
+    assert.equal(core.controlButtonIndex(undefined), 0);
+    // Whole class names only.
+    assert.equal(core.controlButtonIndex(['btnLyricsX', 'btnShuffleQueueMobile']), 2);
+});
+
+test('itemIdFromSrc: the item id out of jellyfin-web\'s audio URLs', () => {
+    const id = '8afcd5e1f7644a56851bdb0aac469b10';
+    assert.equal(core.itemIdFromSrc('http://h/Audio/' + id + '/universal?UserId=x&DeviceId=y&api_key=z'), id);
+    assert.equal(core.itemIdFromSrc('http://h/jellyfin/Audio/' + id + '/stream.flac?Static=true'), id);
+    assert.equal(core.itemIdFromSrc('/Audio/8AFCD5E1-F764-4A56-851B-DB0AAC469B10/universal'), id);
+    assert.equal(core.itemIdFromSrc('http://h/Videos/' + id + '/stream'), null);
+    assert.equal(core.itemIdFromSrc('http://h/Audio/notanid/universal'), null);
+    assert.equal(core.itemIdFromSrc(''), null);
+    assert.equal(core.itemIdFromSrc(undefined), null);
+});
+
+test('normalizeLyrics: synced lines sorted by time in seconds, unsynced as a block, nothing when empty', () => {
+    const synced = core.normalizeLyrics({ Metadata: {}, Lyrics: [{ Start: 125000000, Text: 'second' }, { Start: 0, Text: 'first' }, { Start: 300000000, Text: '' }] });
+    assert.deepEqual(synced, { synced: true, lines: [{ start: 0, text: 'first' }, { start: 12.5, text: 'second' }, { start: 30, text: '' }] });
+    const plain = core.normalizeLyrics({ Lyrics: [{ Text: 'line one' }, { Text: ' line two ' }] });
+    assert.deepEqual(plain, { synced: false, lines: [{ start: null, text: 'line one' }, { start: null, text: 'line two' }] });
+    // A line without a time makes the whole lot unsynced rather than a jumping display.
+    assert.equal(core.normalizeLyrics({ Lyrics: [{ Start: 0, Text: 'a' }, { Text: 'b' }] }).synced, false);
+    assert.equal(core.normalizeLyrics({ Lyrics: [] }), null);
+    assert.equal(core.normalizeLyrics({ Lyrics: [{ Text: '' }, { Start: 5, Text: '  ' }] }), null);
+    assert.equal(core.normalizeLyrics(null), null);
+    assert.equal(core.normalizeLyrics({}), null);
+    // Equal times keep their order.
+    const tie = core.normalizeLyrics({ Lyrics: [{ Start: 10, Text: 'x' }, { Start: 10, Text: 'y' }] });
+    assert.deepEqual(tie.lines.map((l) => l.text), ['x', 'y']);
+});
+
+test('lyricIndexAt: the last line that has started, -1 before the first', () => {
+    const lines = [{ start: 0.5 }, { start: 12.5 }, { start: 30 }];
+    assert.equal(core.lyricIndexAt(lines, 0), -1);
+    assert.equal(core.lyricIndexAt(lines, 0.5), 0);
+    assert.equal(core.lyricIndexAt(lines, 12.49), 0);
+    assert.equal(core.lyricIndexAt(lines, 12.5), 1);
+    assert.equal(core.lyricIndexAt(lines, 1000), 2);
+    assert.equal(core.lyricIndexAt([], 5), -1);
+    assert.equal(core.lyricIndexAt(lines, NaN), -1);
+    assert.equal(core.lyricIndexAt(undefined, 5), -1);
+});
+
+test('blockOffset: an unsynced block stays put while it fits and scrolls with progress when it does not', () => {
+    assert.equal(core.blockOffset(400, 800, 0.5), 0);
+    assert.equal(core.blockOffset(800, 800, 1), 0);
+    assert.equal(core.blockOffset(1800, 800, 0), 0);
+    assert.equal(core.blockOffset(1800, 800, 0.5), -500);
+    assert.equal(core.blockOffset(1800, 800, 1), -1000);
+    assert.equal(core.blockOffset(1800, 800, 7), -1000);
+    assert.equal(core.blockOffset(1800, 800, -1), 0);
+    assert.equal(core.blockOffset(1800, 800, NaN), 0);
 });

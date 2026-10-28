@@ -4,11 +4,12 @@
     <title>Milkdrop Visualizer</title>
 </head>
 <body>
-<div id="MilkdropConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+<div id="MilkdropConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-select">
     <style>
         .milkdrop-help { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.3em; height: 1.3em; margin-left: .4em; border-radius: 50%; border: 1px solid currentColor; font-size: .8em; line-height: 1; opacity: .7; cursor: help; vertical-align: middle; }
         .milkdrop-help:hover, .milkdrop-help:focus { opacity: 1; outline: none; }
-        .milkdrop-help .milkdrop-tip { position: absolute; right: 0; top: 1.7em; z-index: 10; width: max-content; max-width: min(24em, 70vw); padding: .5em .7em; border-radius: .4em; background: #202020; color: #fff; font-size: 1.1em; font-weight: 400; line-height: 1.35; white-space: normal; box-shadow: 0 .2em .8em rgba(0,0,0,.5); display: none; }
+        .milkdrop-help .milkdrop-tip { position: absolute; left: 0; top: 1.7em; z-index: 10; width: max-content; max-width: min(24em, 70vw); padding: .5em .7em; border-radius: .4em; background: #202020; color: #fff; font-size: 1.1em; font-weight: 400; line-height: 1.35; white-space: normal; box-shadow: 0 .2em .8em rgba(0,0,0,.5); display: none; }
+        .milkdrop-help.milkdrop-flip .milkdrop-tip { left: auto; right: 0; }
         .milkdrop-help:hover .milkdrop-tip, .milkdrop-help:focus .milkdrop-tip { display: block; }
         .milkdrop-label { display: inline-flex; align-items: center; }
         .milkdrop-version { opacity: .6; font-size: .9em; }
@@ -46,7 +47,45 @@
                         </label>
                         <input is="emby-input" type="number" id="milkdropBlendSeconds" min="0" max="30" step="0.1" required />
                     </div>
-                    <p>In the player: the visualizer button appears while a track is loaded. Hotkeys: <strong>v</strong> toggle, <strong>b</strong> next preset, <strong>n</strong> previous preset, <strong>Escape</strong> close.</p>
+                </div>
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Buttons and views</h2>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="milkdropControlButton" />
+                            <span class="milkdrop-label">Visualizer button in the Now Playing controls
+                                <span class="milkdrop-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="milkdrop-tip">An icon button between Lyrics and Shuffle on the Now Playing page.</span></span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="milkdropFloatingButton" />
+                            <span class="milkdrop-label">Floating visualizer button on other pages
+                                <span class="milkdrop-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="milkdrop-tip">A round button at the bottom right while a track is loaded, wherever the Now Playing controls are not on screen. The v key works everywhere regardless.</span></span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="selectContainer">
+                        <label class="selectLabel milkdrop-label" for="milkdropDefaultView">Opens as
+                            <span class="milkdrop-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="milkdrop-tip">The view the visualizer starts in. The l key or the Lyrics button switches lyrics on and off while it is open.</span></span>
+                        </label>
+                        <select is="emby-select" id="milkdropDefaultView">
+                            <option value="visualizer">Visualizer only</option>
+                            <option value="lyrics">Visualizer with lyrics</option>
+                        </select>
+                    </div>
+                    <div class="selectContainer">
+                        <label class="selectLabel milkdrop-label" for="milkdropLyricsSize">Lyrics text size
+                            <span class="milkdrop-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="milkdrop-tip">The size of the lyrics over the visualizer. Lyrics come from the track's lyrics in Jellyfin (synced lines follow the music).</span></span>
+                        </label>
+                        <select is="emby-select" id="milkdropLyricsSize">
+                            <option value="small">Small</option>
+                            <option value="medium">Medium</option>
+                            <option value="large">Large</option>
+                        </select>
+                    </div>
+                    <p>In the player: the visualizer button appears while a track is loaded. Hotkeys: <strong>v</strong> toggle, <strong>l</strong> lyrics, <strong>b</strong> next preset, <strong>n</strong> previous preset, <strong>Escape</strong> close.</p>
                 </div>
                 <div>
                     <button is="emby-button" type="submit" class="raised button-submit block emby-button">
@@ -68,6 +107,10 @@
                     page.querySelector('#milkdropDesktopWebAudio').checked = config.DesktopWebAudio !== false;
                     page.querySelector('#milkdropCycleSeconds').value = typeof config.CycleSeconds === 'number' ? config.CycleSeconds : 30;
                     page.querySelector('#milkdropBlendSeconds').value = typeof config.BlendSeconds === 'number' ? config.BlendSeconds : 2.7;
+                    page.querySelector('#milkdropControlButton').checked = config.ControlButton !== false;
+                    page.querySelector('#milkdropFloatingButton').checked = config.FloatingButton !== false;
+                    page.querySelector('#milkdropDefaultView').value = config.DefaultView === 'lyrics' ? 'lyrics' : 'visualizer';
+                    page.querySelector('#milkdropLyricsSize').value = ['small', 'medium', 'large'].indexOf(config.LyricsSize) >= 0 ? config.LyricsSize : 'medium';
                     Dashboard.hideLoadingMsg();
                 });
                 ApiClient.getJSON(ApiClient.getUrl('Plugins')).then(function (plugins) {
@@ -78,6 +121,18 @@
 
             page.addEventListener('pageshow', load);
 
+            // A tip opens toward the middle of the window: left-anchored from the left half, right-anchored
+            // from the right half, so a short label near the left edge and a long one near the right edge
+            // both keep their tip on screen.
+            Array.prototype.forEach.call(page.querySelectorAll('.milkdrop-help'), function (help) {
+                function place() {
+                    var r = help.getBoundingClientRect();
+                    help.classList.toggle('milkdrop-flip', r.left + r.width / 2 > window.innerWidth / 2);
+                }
+                help.addEventListener('mouseenter', place);
+                help.addEventListener('focus', place);
+            });
+
             page.querySelector('#MilkdropConfigForm').addEventListener('submit', function (e) {
                 e.preventDefault();
                 Dashboard.showLoadingMsg();
@@ -86,6 +141,10 @@
                     config.DesktopWebAudio = page.querySelector('#milkdropDesktopWebAudio').checked;
                     config.CycleSeconds = Math.max(0, Math.min(3600, Math.round(Number(page.querySelector('#milkdropCycleSeconds').value) || 0)));
                     config.BlendSeconds = Math.max(0, Math.min(30, Number(page.querySelector('#milkdropBlendSeconds').value) || 0));
+                    config.ControlButton = page.querySelector('#milkdropControlButton').checked;
+                    config.FloatingButton = page.querySelector('#milkdropFloatingButton').checked;
+                    config.DefaultView = page.querySelector('#milkdropDefaultView').value;
+                    config.LyricsSize = page.querySelector('#milkdropLyricsSize').value;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(Dashboard.processPluginConfigurationUpdateResult);
                 });
                 return false;

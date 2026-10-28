@@ -13,8 +13,29 @@ namespace Jellyfin.Plugin.Milkdrop.WebUi;
 /// <param name="DesktopWebAudio">Whether Jellyfin Desktop plays music through the web player.</param>
 /// <param name="CycleSeconds">Seconds between automatic preset changes; zero for none.</param>
 /// <param name="BlendSeconds">Seconds a preset change blends over.</param>
-public sealed record ClientSettings(bool DesktopWebAudio, int CycleSeconds, double BlendSeconds)
+/// <param name="ControlButton">Whether the Now Playing control row gets a visualizer button.</param>
+/// <param name="FloatingButton">Whether a floating visualizer button is shown on other pages.</param>
+/// <param name="DefaultView">The view the visualizer opens in, one of <see cref="Views"/>.</param>
+/// <param name="LyricsSize">The lyrics text size, one of <see cref="LyricsSizes"/>.</param>
+public sealed record ClientSettings(
+    bool DesktopWebAudio,
+    int CycleSeconds,
+    double BlendSeconds,
+    bool ControlButton,
+    bool FloatingButton,
+    string DefaultView,
+    string LyricsSize)
 {
+    /// <summary>
+    /// The views the visualizer can open in; the first is the default.
+    /// </summary>
+    public static readonly string[] Views = ["visualizer", "lyrics"];
+
+    /// <summary>
+    /// The lyrics text sizes; the second is the default.
+    /// </summary>
+    public static readonly string[] LyricsSizes = ["small", "medium", "large"];
+
     /// <summary>
     /// The longest auto-cycle interval the script accepts, in seconds.
     /// </summary>
@@ -45,7 +66,20 @@ public sealed record ClientSettings(bool DesktopWebAudio, int CycleSeconds, doub
 
         var cycle = Math.Clamp(configuration.CycleSeconds, 0, MaxCycleSeconds);
         var blend = double.IsFinite(configuration.BlendSeconds) ? Math.Clamp(configuration.BlendSeconds, 0, MaxBlendSeconds) : 0;
-        return new ClientSettings(configuration.DesktopWebAudio, cycle, blend);
+        return new ClientSettings(
+            configuration.DesktopWebAudio,
+            cycle,
+            blend,
+            configuration.ControlButton,
+            configuration.FloatingButton,
+            PickOne(configuration.DefaultView, Views, Views[0]),
+            PickOne(configuration.LyricsSize, LyricsSizes, LyricsSizes[1]));
+    }
+
+    private static string PickOne(string? value, string[] allowed, string fallback)
+    {
+        var lower = value?.Trim().ToLowerInvariant();
+        return lower is not null && Array.IndexOf(allowed, lower) >= 0 ? lower : fallback;
     }
 
     /// <summary>

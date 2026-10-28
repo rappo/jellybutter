@@ -6,15 +6,27 @@ repository, updated from there; nothing to install on any client.
 
 ![The visualizer full screen in Jellyfin Desktop, with the preset controls at the bottom right](docs/visualizer.png)
 
+![The lyrics view: the current line large and glowing over the visualizer, past lines dimmed above, upcoming lines below](docs/visualizer-lyrics.png)
+
 ## What it does
 
-- A round **visualizer button** appears at the bottom right whenever a track is loaded in the web player.
-  It is a real button, so jellyfin-web's arrow-key (D-pad) navigation reaches it.
+- A **visualizer button** in the Now Playing controls, between Lyrics and Shuffle, styled like
+  jellyfin-web's own buttons. On every other page a round floating button appears at the bottom right
+  while a track is loaded. Both are real buttons, so jellyfin-web's arrow-key (D-pad) navigation reaches
+  them; both can be switched off.
 - The visualizer opens **full screen**: a random preset to start, a new one every 30 seconds (setting),
   2.7 seconds of blend between presets (setting), and the preset's name shown for 3 seconds on each change.
-- **Hotkeys:** `v` toggles the visualizer, `b` next preset, `n` previous preset, `Escape` closes. A Steam
-  Input layout that maps paddles to `v`, `b` and `n` drives it from a controller. On-screen buttons for
-  previous, random, next and close appear on hover or when focused.
+- A **lyrics view** lays the track's lyrics over the visualizer, readable over any preset (dark outline,
+  drop shadow, accent glow on the current line). Lyrics come from Jellyfin's own Lyrics API, so whatever
+  feeds the web client's lyrics page (sidecar `.lrc`/`.txt` files, the LrcLib plugin) feeds this too.
+  Synced lyrics follow the music: the current line is large and centered, past lines dimmed above,
+  upcoming lines below, with a smooth move on every change. Unsynced lyrics sit as a block, centered when
+  they fit and scrolled with playback progress when they do not. A setting picks whether the visualizer
+  opens with or without lyrics; `l` or the Lyrics button toggles them while it is open.
+- **Hotkeys:** `v` toggles the visualizer, `l` toggles lyrics, `b` next preset, `n` previous preset,
+  `Escape` closes. A Steam Input layout that maps paddles to `v`, `b` and `n` drives it from a
+  controller. On-screen buttons for previous, random, next, lyrics and close appear on hover or when
+  focused.
 - **Jellyfin Desktop:** the desktop client plays music through mpv, which a web page cannot hear. With the
   "Play music in the web player on Jellyfin Desktop" setting (on by default) the plugin hides the mpv
   audio player from the web client, so music plays through the web player and the visualizer hears it.
@@ -44,6 +56,10 @@ Dashboard > Plugins > Milkdrop Visualizer.
 | Play music in the web player on Jellyfin Desktop | on | Hide mpv's audio player from the web client so music plays through the web player (video stays on mpv). |
 | Change preset every (seconds) | 30 | 0 keeps a preset until you change it. |
 | Blend between presets (seconds) | 2.7 | 0 switches instantly. |
+| Visualizer button in the Now Playing controls | on | The icon button between Lyrics and Shuffle. |
+| Floating visualizer button on other pages | on | The round button at the bottom right wherever the Now Playing controls are not on screen. |
+| Opens as | Visualizer only | Or "Visualizer with lyrics". `l` switches lyrics on and off either way. |
+| Lyrics text size | Medium | Small, Medium or Large. |
 
 Settings take effect on the next page load of the web client (a reload, or reopening the desktop client).
 
@@ -60,6 +76,12 @@ Audio graph the first time the visualizer opens (an element's output can only be
 graph is built once per element), and lazy-loads the two Butterchurn bundles from the plugin on that first
 open. Butterchurn 2.6.7 and butterchurn-presets 2.4.7 are pinned in `package.json`, copied from
 `node_modules` by the build and embedded in the DLL.
+
+The Now Playing button is inserted into jellyfin-web's own button row as the same kind of element
+(`paper-icon-button-light`, a Material icon), and put back whenever jellyfin-web rebuilds the row. The
+lyrics view reads the track id out of the audio element's URL and fetches `Audio/{id}/Lyrics` through the
+web client's own API client, once per track; synced lines are chosen by the audio element's current time
+on every frame while the visualizer is open.
 
 ## Development
 

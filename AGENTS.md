@@ -31,7 +31,8 @@ Directory.Packages.props           central package versions
 Jellyfin.Plugin.Milkdrop/
   Plugin.cs                        BasePlugin, GUID, VersionString, config page registration
   ServiceRegistrator.cs            registers the IStartupFilter
-  Configuration/PluginConfiguration.cs   Enabled, DesktopWebAudio, CycleSeconds, BlendSeconds
+  Configuration/PluginConfiguration.cs   Enabled, DesktopWebAudio, CycleSeconds, BlendSeconds, ControlButton,
+                                   FloatingButton, DefaultView, LyricsSize
   Configuration/configPage.html    the settings page (legacy plugin page; tooltips on each control)
   WebUi/ClientSettings.cs          the clamped settings record and its camel-case JSON
   WebUi/IndexHtmlInjector.cs       pure: builds the tag, inserts it once before </body>
@@ -68,6 +69,9 @@ run `jellyfin/jellyfin --datadir D --configdir C --cachedir K --logdir L --webdi
 --ffmpeg /usr/bin/ffmpeg` with the plugin folder under `D/plugins/`. Complete the startup wizard with the
 `/Startup/*` endpoints, add a music library of ffmpeg-generated FLAC files, then:
 
+- Lyrics for the test tracks: an `.lrc` (synced) or `.txt` (plain) file next to a FLAC with the same base
+  name, then `POST /Library/Refresh`; `GET /Audio/{id}/Lyrics` returns `{ Lyrics: [{ Text, Start? }] }`
+  with `Start` in 100 ns ticks, or 404 when a track has none.
 - `curl -s http://127.0.0.1:8096/web/index.html | grep data-jf-milkdrop` shows the injected tag.
 - `curl -sI http://127.0.0.1:8096/Milkdrop/client.js?v=<version>` is 200 with `cache-control: public, max-age=31536000, immutable`.
 - The server log has `Milkdrop: client script added to index.html at request time.` after the first page load.
@@ -89,7 +93,19 @@ The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_T
 - **The tag is not `defer`red.** jellyfin-web asks `NativeShell.getPlugins()` from its deferred bundles; the
   wrap that hides `mpvAudioPlayer` must already be in place, so the plugin's tag runs synchronously at the
   end of `<body>`.
-- **The toggle button lives inside a positioned wrapper div.** jellyfin-web's focus manager treats
+- **The Now Playing button goes into `.nowPlayingSecondaryButtons`**, right after `.btnLyrics` (else before
+  `.btnShuffleQueue`, else last). jellyfin-web 12.2's Now Playing page has two groups: the transport
+  controls in `.nowPlayingInfoButtons` (with a second shuffle/repeat pair for the mobile layout) and
+  favorite, lyrics, shuffle, repeat and volume in `.nowPlayingSecondaryButtons`. The button is made as
+  jellyfin-web makes its own (`createElement('button', { is: 'paper-icon-button-light' })` with a
+  `material-icons graphic_eq` span), so it takes the row's size, focus ring and TV-layout focus scale.
+  jellyfin-web rebuilds the row, so every DOM mutation and every `viewshow`/`viewhide` schedules a refresh
+  (coalesced onto one animation frame: the refresh reads layout) that puts the button back and recomputes
+  which button shows.
+- **"The row is on screen" means `offsetParent !== null` and a width, not "in the DOM":** jellyfin-web
+  keeps the Now Playing view in the DOM, hidden, after navigating away. The floating button shows exactly
+  when the row is not on screen (or the row button is switched off); see `buttonPlacement`.
+- **The floating toggle button lives inside a positioned wrapper div.** jellyfin-web's focus manager treats
   `offsetParent === null` as "not focusable", and a `position: fixed` element's offsetParent is always
   null; a child of a fixed wrapper has the wrapper as offsetParent. Making the button itself fixed breaks
   D-pad navigation.
@@ -113,6 +129,18 @@ The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_T
   the old script until the version changes: use a fresh origin (127.0.0.2, 127.0.0.3, ...) per build, or a
   devtools reload that bypasses the cache (`Page.reload` with `ignoreCache`; QtWebEngine ignores
   `Network.clearBrowserCache` for these). A release never has this problem: CI refuses to republish a version.
+- **Lyrics come from Jellyfin's Lyrics API through jellyfin-web's own `window.ApiClient`** (`getJSON` of
+  `getUrl('Audio/' + id + '/Lyrics')`, which carries the session's auth), once per track, keyed by the
+  item id parsed out of the `<audio>` element's URL (`Audio/{id}/universal`, `Audio/{id}/stream.*`).
+  `Start` is in 100 ns ticks; `normalizeLyrics` turns it into seconds and sorts. Lyrics are synced only
+  when every line has a time. The current line is picked by the element's `currentTime` on every rendered
+  frame (`lyricIndexAt`), classes and the column's transform change only when the index changes; an
+  unsynced block is centered when it fits and translated by playback progress when taller than the view
+  (`blockOffset`). Readability over any preset comes from the text stroke under the fill
+  (`paint-order: stroke fill`), the drop shadow and the accent glow on the current line; the column fades
+  at the top and bottom edges with a mask.
+- **The opening view is the setting, every time:** `open()` sets lyrics on or off from
+  `config.defaultView`; `l` and the Lyrics control toggle it for the rest of that session of the overlay.
 - **`window.jfMilkdrop`** is a read-only diagnostic handle (version, config, core helpers, live state) for a
   devtools session on a client in the field.
 - **Hotkeys use `window` keydown in the capture phase** with `stopImmediatePropagation`, so `Escape` closes
@@ -124,6 +152,16 @@ The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_T
   plugin update replaces a cached page.
 
 ## Lessons
+
+- 2026-10-27: In the TV layout, jellyfin-web's D-pad choice is geometry over the focused element's
+  *scaled* box (`.show-focus:focus` scales it), and at a 1280x720 window the volume's mute button wraps
+  to a second line right under the Lyrics button. Right from Lyrics then sometimes lands on mute instead
+  of the next button in the row, with or without the plugin's button; once the scale animation settles,
+  right from Lyrics reaches the visualizer button and left from Shuffle does too. Not something the plugin
+  can fix; probe D-pad paths with a short wait after moving focus.
+- 2026-10-27: When restarting the throwaway server and reloading the client in one go, wait for the
+  plugin endpoint to answer before `Page.reload`: a reload that races the restart gets no new script and
+  the immutable cached one stays.
 
 - 2026-10-27: Jellyfin Desktop can be driven headlessly for verification: `flatpak run
   org.jellyfin.JellyfinDesktop --create-profile <name>`, then `--profile <name> --remote-debugging-port 9222

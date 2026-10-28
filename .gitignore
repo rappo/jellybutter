@@ -1,0 +1,8 @@
+bin/
+obj/
+*.user
+.vs/
+node_modules/
+dist/
+TestResults/
+.claude/settings.local.json

@@ -1,0 +1,13 @@
+<Project>
+  <!-- JellyfinVersion selects the NuGet packages (Directory.Packages.props); the plugin targets the
+       framework that Jellyfin generation runs on. The plugin version is read from meta.json, the one
+       place it is declared: the zip's meta.json, the assembly version, the script tag's cache buster and
+       the release tag all come from it. -->
+  <PropertyGroup>
+    <JellyfinVersion Condition="'$(JellyfinVersion)' == ''">12.2.0</JellyfinVersion>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Version Condition="'$(Version)' == ''">$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)meta.json')), '"version":\s*"([^"]+)"').Groups.get_Item(1).Value)</Version>
+  </PropertyGroup>
+</Project>

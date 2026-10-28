@@ -1,0 +1,14 @@
+{
+  "name": "jellyfin-plugin-milkdrop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pins the Butterchurn bundles the plugin embeds; the plugin itself is built by dotnet.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test tests/"
+  },
+  "dependencies": {
+    "butterchurn": "2.6.7",
+    "butterchurn-presets": "2.4.7"
+  }
+}

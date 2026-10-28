@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Jellyfin.Plugin.Milkdrop</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Jellyfin.Controller" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Common" ExcludeAssets="runtime" />
+    <PackageReference Include="StyleCop.Analyzers" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Butterchurn is pinned by the repo's package.json and copied out of node_modules into the build, so
+       the plugin serves it itself: nothing is loaded from a CDN. A build without node_modules runs
+       `npm ci` once (node is required then; CI runs it on the runner before the dotnet container). -->
+  <PropertyGroup>
+    <NpmRoot>$(MSBuildThisFileDirectory)..\</NpmRoot>
+    <ButterchurnSource>$(NpmRoot)node_modules\butterchurn\lib\butterchurn.min.js</ButterchurnSource>
+    <ButterchurnPresetsSource>$(NpmRoot)node_modules\butterchurn-presets\lib\butterchurnPresets.min.js</ButterchurnPresetsSource>
+    <ButterchurnBundle>$(BaseIntermediateOutputPath)butterchurn\butterchurn.min.js</ButterchurnBundle>
+    <ButterchurnPresetsBundle>$(BaseIntermediateOutputPath)butterchurn\butterchurnPresets.min.js</ButterchurnPresetsBundle>
+  </PropertyGroup>
+
+  <Target Name="RestoreButterchurn" Condition="!Exists('$(ButterchurnSource)') Or !Exists('$(ButterchurnPresetsSource)')">
+    <Message Importance="high" Text="node_modules is missing; running npm ci to fetch the pinned Butterchurn bundles." />
+    <Exec Command="npm ci --ignore-scripts --no-audit --no-fund" WorkingDirectory="$(NpmRoot)" />
+    <Error Condition="!Exists('$(ButterchurnSource)') Or !Exists('$(ButterchurnPresetsSource)')" Text="npm ci did not produce the Butterchurn bundles under node_modules." />
+  </Target>
+
+  <Target Name="BundleButterchurn" DependsOnTargets="RestoreButterchurn" BeforeTargets="PrepareResources;BeforeCompile;CoreCompile" Inputs="$(ButterchurnSource);$(ButterchurnPresetsSource)" Outputs="$(ButterchurnBundle);$(ButterchurnPresetsBundle)">
+    <Copy SourceFiles="$(ButterchurnSource)" DestinationFiles="$(ButterchurnBundle)" />
+    <Copy SourceFiles="$(ButterchurnPresetsSource)" DestinationFiles="$(ButterchurnPresetsBundle)" />
+  </Target>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Configuration\configPage.html" LogicalName="Jellyfin.Plugin.Milkdrop.Configuration.configPage.html" />
+    <EmbeddedResource Include="Web\milkdrop.js" LogicalName="Jellyfin.Plugin.Milkdrop.Web.milkdrop.js" />
+    <EmbeddedResource Include="$(ButterchurnBundle)" LogicalName="Jellyfin.Plugin.Milkdrop.Web.butterchurn.min.js" />
+    <EmbeddedResource Include="$(ButterchurnPresetsBundle)" LogicalName="Jellyfin.Plugin.Milkdrop.Web.butterchurnPresets.min.js" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Jellyfin.Plugin.Milkdrop.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -12,7 +12,7 @@
  *     buttons) when that row is on screen, and a floating button elsewhere. jellyfin-web rebuilds the
  *     row, so the button is put back whenever it goes missing. The floating button sits inside a
  *     positioned wrapper because jellyfin-web's arrow-key (D-pad) focus manager skips any element whose
- *     offsetParent is null, which a fixed-position element's always is.
+ *     offsetParent is null, which a fixed-position element's always is. Its bars bounce while music plays.
  *   - Listens on the element's Web Audio source node. jellyfin-web's own audio player routes the element
  *     through an AudioContext of its own (a gain node for volume normalization) as playback starts, and an
  *     element can feed only one MediaElementAudioSourceNode, so createMediaElementSource is wrapped at
@@ -167,6 +167,10 @@
          * Whether an <audio> element has a track to visualize: playing, or paused on a loaded track. A
          * stopped element (source cleared) or one that has ended does not count.
          */
+        isPlaying: function (audio) {
+            return !!audio && !audio.paused && !audio.ended;
+        },
+
         isTrackLoaded: function (audio) {
             if (!audio) { return false; }
             if (audio.ended) { return false; }
@@ -472,6 +476,15 @@
             '.jellybutter-toggle:hover,.jellybutter-toggle:focus{background:rgba(0,164,220,.85);outline:none;transform:scale(1.1)}',
             '.jellybutter-toggle:focus-visible{box-shadow:0 0 0 .2em #fff}',
             '.jellybutter-toggle svg{width:1.5em;height:1.5em}',
+            // While music plays, the floating button's bars bounce like a level meter: each line scales from
+            // its foot on its own period, so they never move in step. Still for reduced motion.
+            '@keyframes jellybutter-eq{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.3)}}',
+            '.jellybutter-toggle-wrap.jellybutter-playing .jellybutter-toggle line{transform-box:fill-box;transform-origin:50% 100%;animation:jellybutter-eq .9s ease-in-out infinite}',
+            '.jellybutter-toggle-wrap.jellybutter-playing .jellybutter-toggle line:nth-child(2){animation-duration:.7s;animation-delay:-.3s}',
+            '.jellybutter-toggle-wrap.jellybutter-playing .jellybutter-toggle line:nth-child(3){animation-duration:1.1s;animation-delay:-.6s}',
+            '.jellybutter-toggle-wrap.jellybutter-playing .jellybutter-toggle line:nth-child(4){animation-duration:.8s;animation-delay:-.2s}',
+            '.jellybutter-toggle-wrap.jellybutter-playing .jellybutter-toggle line:nth-child(5){animation-duration:1s;animation-delay:-.5s}',
+            '@media (prefers-reduced-motion:reduce){.jellybutter-toggle-wrap.jellybutter-playing .jellybutter-toggle line{animation:none}}',
             '.jellybutter-overlay{position:fixed;inset:0;z-index:99999;background:#000;display:none;font-family:inherit}',
             '.jellybutter-overlay.jellybutter-open{display:block}',
             '.jellybutter-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}',
@@ -748,6 +761,7 @@
     }
 
     function onAudioEvent() {
+        ui.toggleWrap.classList.toggle('jellybutter-playing', JellybutterCore.isPlaying(state.audio));
         var loaded = JellybutterCore.isTrackLoaded(state.audio);
         if (loaded) {
             clearTimeout(state.stopTimer);

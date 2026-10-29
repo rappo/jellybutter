@@ -297,3 +297,10 @@ test('trackSubtitle: artist and album, whichever are known', () => {
     assert.equal(core.trackSubtitle(undefined, 'Blood Mountain'), 'Blood Mountain');
     assert.equal(core.trackSubtitle('  ', null), '');
 });
+
+test('isPlaying: only while the element plays, not paused, ended or missing', () => {
+    assert.equal(core.isPlaying({ paused: false, ended: false }), true);
+    assert.equal(core.isPlaying({ paused: true, ended: false }), false);
+    assert.equal(core.isPlaying({ paused: false, ended: true }), false);
+    assert.equal(core.isPlaying(null), false);
+});

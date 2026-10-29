@@ -12,8 +12,8 @@ repository, updated from there; nothing to install on any client.
 
 - A **visualizer button** in the Now Playing controls, between Lyrics and Shuffle, styled like
   jellyfin-web's own buttons. On every other page a round floating button appears at the bottom right
-  while a track is loaded. Both are real buttons, so jellyfin-web's arrow-key (D-pad) navigation reaches
-  them; both can be switched off.
+  while a track is loaded; its bars bounce while music plays. Both are real buttons, so jellyfin-web's
+  arrow-key (D-pad) navigation reaches them; both can be switched off.
 - The visualizer opens **full screen**: a random preset to start, a new one every 30 seconds (setting),
   2.7 seconds of blend between presets (setting), and the preset's name shown for 3 seconds on each change.
 - A **lyrics view** lays the track's lyrics over the visualizer, readable over any preset (dark outline,

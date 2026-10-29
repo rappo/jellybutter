@@ -151,12 +151,29 @@ The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_T
   reaches. A real page change while the visualizer is open re-asserts it after jellyfin-web's handler.
   `html.jellybutter-bar` lifts `.appfooter` (z-index 1201 !important in jellyfin-web) above the overlay and
   pins it against headroom; the overlay's controls and lyrics stop above the bar via `--jellybutter-bar`,
-  measured from the footer and kept current by a MutationObserver on it while open (`barInset`). The TV
-  layout never builds the bar (jellyfin-web checks `layoutManager.tv`), so there the inset is 0.
+  measured from the footer and kept current by a MutationObserver on it while open (`barInset`).
+- **The TV layout gets the visualizer's own bar** (`html.layout-tv` at open): jellyfin-web's bar module
+  returns early under `layoutManager.tv`, so nothing can raise it there. jellyfin-web has no global
+  playback manager, but it registers Media Session action handlers that call it (`MediaSessionSubscriber`:
+  play, pause, previoustrack, nexttrack, seekbackward, seekforward, ...) and publishes
+  `navigator.mediaSession.metadata`. `captureMediaActions` wraps `setActionHandler` at load (the script tag
+  is a plain one after jellyfin-web's deferred bundles, so it runs first) and the bar's buttons call the
+  captured handlers; a button whose handler never registered is hidden, and play/pause falls back to the
+  element. Title, artist, album and artwork come from the metadata, position from the element, all
+  refreshed from the render loop writing only what changed.
+- **While open, the visualizer owns the D-pad.** `navKeyFor` maps arrows, Enter, Escape and the keys
+  jellyfin-web's gamepadtokey dispatches (`GamepadDPad*`, `GamepadLeftThumbStick*`, `GamepadA`,
+  `GamepadB`, with the arrow, Enter and Escape key codes; it loads only with jellyfin-web's "Enable
+  gamepad" setting) plus remote Back codes. The keydown is prevented and stopped in the capture phase, so
+  jellyfin-web's focus manager never walks into the page under the overlay and gamepadtokey's click on
+  releasing A (skipped when the keydown was prevented) does not press twice; `onNav` clicks the focused
+  button itself. Focus moves by geometry (`nextFocusIndex`) among the overlay's buttons and jellyfin-web's
+  bar buttons. The controls fade 2.5 s after the last key even while one holds focus; the first key
+  after that only wakes them.
 - **`window.jellybutter`** is a read-only diagnostic handle (version, config, core helpers, live state) for a
   devtools session on a client in the field.
-- **Hotkeys use `window` keydown in the capture phase** with `stopImmediatePropagation`, so `Escape` closes
-  the visualizer instead of being jellyfin-web's "back".
+- **Hotkeys use `window` keydown in the capture phase** with `stopImmediatePropagation`, so `Escape` (and
+  any Back) closes the visualizer instead of being jellyfin-web's "back".
 - **Track changes do not close the visualizer:** the audio element is emptied and reloaded between tracks,
   so a stop only counts after a 1.5 s grace with nothing loaded.
 - **Asset URLs carry `?v=<plugin version>`** and are served immutable for a year when the version matches,

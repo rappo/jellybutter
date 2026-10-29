@@ -26,8 +26,14 @@
  *   - Now Playing bar: jellyfin-web's own bar along the bottom of the visualizer, live, on every page. jellyfin-web
  *     shows it only on views whose options allow media control, read from the viewbeforeshow event on the
  *     document; opening tells it "allowed" with that same event and closing hands back the page's own value.
+ *     The TV layout has no such bar (jellyfin-web never builds it there), so there the visualizer shows its
+ *     own: title, artist and artwork from the Media Session metadata jellyfin-web publishes, and transport
+ *     buttons calling the Media Session handlers it registers (captured at load, like the source nodes).
  *   - Hotkeys: v toggles the visualizer, l toggles lyrics, b next preset, n previous preset, Escape closes.
  *     Ignored while typing in a field.
+ *   - D-pad: while open, arrows (keyboard, remote, or a gamepad through jellyfin-web's gamepad setting) wake
+ *     the controls and move between them and the Now Playing bar's buttons, Enter or A presses, Back or B
+ *     closes.
  *
  * The pure helpers live on JellybutterCore and are exported for the node:test suite under tests/; the DOM
  * part only runs in a browser.
@@ -217,6 +223,84 @@
             return footerHeight > 0 ? Math.round(footerHeight) : 0;
         },
 
+        /**
+         * The navigation a key means while the visualizer is open: 'left', 'right', 'up', 'down', 'select',
+         * 'back' or null. Covers the keyboard, TV remotes and jellyfin-web's gamepad translation (with
+         * "Enable gamepad" on it sends keydown events keyed GamepadDPadLeft, GamepadA, GamepadB and so on,
+         * with the arrow, Enter and Escape key codes), the same tables jellyfin-web's own navigation reads.
+         */
+        navKeyFor: function (key, keyCode, modifiers) {
+            if (modifiers && (modifiers.ctrlKey || modifiers.altKey || modifiers.metaKey || modifiers.shiftKey)) { return null; }
+            var byKey = {
+                ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down',
+                GamepadDPadLeft: 'left', GamepadDPadRight: 'right', GamepadDPadUp: 'up', GamepadDPadDown: 'down',
+                GamepadLeftThumbStickLeft: 'left', GamepadLeftThumbStickRight: 'right',
+                GamepadLeftThumbStickUp: 'up', GamepadLeftThumbStickDown: 'down',
+                NavigationLeft: 'left', NavigationRight: 'right', NavigationUp: 'up', NavigationDown: 'down',
+                Enter: 'select', GamepadA: 'select',
+                Escape: 'back', GamepadB: 'back', Back: 'back', BrowserBack: 'back', GoBack: 'back'
+            };
+            if (typeof key === 'string' && Object.prototype.hasOwnProperty.call(byKey, key)) { return byKey[key]; }
+            // Remotes that send only a key code: 461 and 10009 are webOS and Tizen's Back.
+            var byCode = { 37: 'left', 38: 'up', 39: 'right', 40: 'down', 13: 'select', 27: 'back', 461: 'back', 10009: 'back' };
+            return Object.prototype.hasOwnProperty.call(byCode, keyCode) ? byCode[keyCode] : null;
+        },
+
+        /**
+         * D-pad focus movement: the index of the rect to go to from `from` in a direction, or -1. A candidate
+         * must lie that way (its center past the current center); one that overlaps the current rect across
+         * the direction is in line and costs only its distance, others pay double for drifting sideways.
+         */
+        nextFocusIndex: function (from, rects, direction) {
+            if (!from || !Array.isArray(rects)) { return -1; }
+            var horizontal = direction === 'left' || direction === 'right';
+            var sign = direction === 'left' || direction === 'up' ? -1 : 1;
+            if (!horizontal && direction !== 'up' && direction !== 'down') { return -1; }
+            var fx = (from.left + from.right) / 2;
+            var fy = (from.top + from.bottom) / 2;
+            var best = -1;
+            var bestScore = Infinity;
+            rects.forEach(function (r, i) {
+                if (!r || !(r.right > r.left) || !(r.bottom > r.top)) { return; }
+                var cx = (r.left + r.right) / 2;
+                var cy = (r.top + r.bottom) / 2;
+                var along = horizontal ? (cx - fx) * sign : (cy - fy) * sign;
+                if (!(along > 1)) { return; }
+                var inLine = horizontal ? r.bottom > from.top && r.top < from.bottom : r.right > from.left && r.left < from.right;
+                var across = inLine ? 0 : Math.abs(horizontal ? cy - fy : cx - fx);
+                var score = along + across * 2;
+                if (score < bestScore) { bestScore = score; best = i; }
+            });
+            return best;
+        },
+
+        /** A playback position as m:ss, or h:mm:ss from an hour; empty for an unknown time. */
+        formatTime: function (seconds) {
+            if (typeof seconds !== 'number' || !isFinite(seconds) || seconds < 0) { return ''; }
+            var s = Math.floor(seconds);
+            var h = Math.floor(s / 3600);
+            var m = Math.floor((s % 3600) / 60);
+            var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+            return h > 0 ? h + ':' + pad(m) + ':' + pad(s % 60) : m + ':' + pad(s % 60);
+        },
+
+        /** The largest image of a Media Session artwork list ([{ src, sizes: '512x512' }]), or null. */
+        pickArtwork: function (artwork) {
+            var list = Array.isArray(artwork) ? artwork.filter(function (a) { return a && typeof a.src === 'string' && a.src; }) : [];
+            var size = function (a) {
+                var m = /(\d+)x(\d+)/.exec(a.sizes || '');
+                return m ? Number(m[1]) * Number(m[2]) : 0;
+            };
+            var best = null;
+            list.forEach(function (a) { if (!best || size(a) > size(best)) { best = a; } });
+            return best ? best.src : null;
+        },
+
+        /** The second line of the TV Now Playing bar: artist and album, whichever are known. */
+        trackSubtitle: function (artist, album) {
+            return [artist, album].filter(function (s) { return typeof s === 'string' && s.trim(); }).join(' — ');
+        },
+
         /** The item id in a jellyfin-web audio URL (Audio/{id}/universal, Audio/{id}/stream.flac, ...). */
         itemIdFromSrc: function (src) {
             if (typeof src !== 'string') { return null; }
@@ -330,6 +414,22 @@
         console.info('[Jellybutter] Jellyfin Desktop: music will play through the web player so the visualizer can hear it.');
     })();
 
+    // Media Session action -> handler, as jellyfin-web registers them (play, pause, previoustrack,
+    // nexttrack, seekbackward, seekforward, ...): each calls its playback manager, which has no global
+    // handle. Recorded by a wrap installed now, before jellyfin-web's deferred bundles register them; the
+    // TV layout's Now Playing bar drives playback through them.
+    var mediaActions = {};
+
+    (function captureMediaActions() {
+        var session = navigator.mediaSession;
+        if (!session || typeof session.setActionHandler !== 'function') { return; }
+        var original = session.setActionHandler;
+        session.setActionHandler = function (action, handler) {
+            mediaActions[action] = typeof handler === 'function' ? handler : null;
+            return original.apply(this, arguments);
+        };
+    })();
+
     var state = {
         audio: null,            // the <audio> element being watched
         trackLoaded: false,     // isTrackLoaded(audio), held through the between-tracks gap
@@ -352,7 +452,12 @@
         unsupported: false,     // set once the browser proved it has no WebGL 2
         lastFocus: null,
         pageMediaControl: null, // enableMediaControl of the page jellyfin-web last showed; null until one shows
-        barObserver: null       // watches the Now Playing bar while the visualizer shows it
+        barObserver: null,      // watches the Now Playing bar while the visualizer shows it
+        tvBar: false,           // the visualizer's own Now Playing bar is up (TV layout, see showBar)
+        barMeta: undefined,     // the Media Session metadata the TV bar last showed
+        barPaused: null,
+        barTime: null,
+        barFraction: -1
     };
 
     var ui = {};
@@ -374,12 +479,18 @@
             '.jellybutter-toast.jellybutter-shown{opacity:1}',
             '.jellybutter-toast small{display:block;font-weight:400;font-size:.75em;color:rgba(255,255,255,.55)}',
             '.jellybutter-controls{position:absolute;right:1em;bottom:calc(1em + var(--jellybutter-bar,0px));display:flex;gap:.3em;opacity:0;transition:opacity .3s}',
-            '.jellybutter-overlay:hover .jellybutter-controls,.jellybutter-controls:focus-within,.jellybutter-overlay.jellybutter-controls-shown .jellybutter-controls{opacity:1}',
+            // Shown while the pointer is over the overlay and for a moment after any key, never merely
+            // because a control holds focus: on a TV the focus stays on a control while the screen is left
+            // to the visualizer, and a D-pad press brings them back (see onNav).
+            '.jellybutter-overlay:hover .jellybutter-controls,.jellybutter-overlay.jellybutter-controls-shown .jellybutter-controls{opacity:1}',
             '.jellybutter-ctrl{width:2.4em;height:2.4em;border:none;border-radius:50%;background:rgba(0,0,0,.5);color:rgba(255,255,255,.85);font-size:1em;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}',
             '.jellybutter-ctrl:hover,.jellybutter-ctrl:focus{background:rgba(0,164,220,.85);color:#fff;outline:none}',
             '.jellybutter-ctrl:focus-visible{box-shadow:0 0 0 .2em #fff}',
             '.jellybutter-ctrl[aria-pressed="true"]{background:rgba(0,164,220,.55);color:#fff}',
             '.jellybutter-ctrl svg{width:1.2em;height:1.2em}',
+            '.jellybutter-ctrl[hidden]{display:none}',
+            '.jellybutter-ctrl.jellybutter-ctrl-main{width:3em;height:3em}',
+            '.jellybutter-ctrl.jellybutter-ctrl-main svg{width:1.5em;height:1.5em}',
             // Lyrics layer: a column over the canvas, faded at the top and bottom edges, never catching
             // the pointer. Sizes are em of the overlay so the TV layout's larger root font scales them.
             '.jellybutter-lyrics{position:absolute;inset:0 0 var(--jellybutter-bar,0px) 0;display:none;overflow:hidden;pointer-events:none;text-align:center;' +
@@ -401,7 +512,21 @@
             '.jellybutter-lyric-future{opacity:.8}',
             '.jellybutter-lyric-active{opacity:1;color:#fff;font-size:var(--jellybutter-active);font-weight:700;-webkit-text-stroke:2px rgba(0,0,0,.8);' +
                 'text-shadow:0 0 20px rgba(0,164,220,.5),0 0 40px rgba(0,164,220,.25),0 2px 4px rgba(0,0,0,.9)}',
-            '.jellybutter-lyric-note{position:absolute;left:8vw;right:8vw;top:50%;transform:translateY(-50%);opacity:.8;font-style:italic}',
+            '.jellybutter-lyric-note{position:absolute;left:8vw;right:8vw;top:50%;transform:translateY(-50%);color:rgba(255,255,255,.4);font-weight:400;-webkit-text-stroke:0;text-shadow:0 1px 3px rgba(0,0,0,.6)}',
+            // The TV layout's Now Playing bar (jellyfin-web builds none there): artwork, title and artist,
+            // transport buttons, the time, and a progress line along its top edge.
+            '.jellybutter-tvbar{position:absolute;left:0;right:0;bottom:0;display:none;align-items:center;gap:1.2em;padding:.9em 2em;background:rgba(16,16,16,.88);color:#fff}',
+            '.jellybutter-overlay.jellybutter-tvbar-on .jellybutter-tvbar{display:flex}',
+            '.jellybutter-tvbar-progress{position:absolute;left:0;right:0;top:0;height:.2em;background:rgba(255,255,255,.15)}',
+            '.jellybutter-tvbar-fill{height:100%;background:#00a4dc;transform-origin:0 50%;transform:scaleX(0)}',
+            '.jellybutter-tvbar-art{width:3.6em;height:3.6em;object-fit:cover;border-radius:.3em;flex:none}',
+            '.jellybutter-tvbar-art[hidden]{display:none}',
+            '.jellybutter-tvbar-text,.jellybutter-tvbar-time{flex:1 1 0;min-width:0}',
+            '.jellybutter-tvbar-title,.jellybutter-tvbar-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+            '.jellybutter-tvbar-title{font-weight:600;font-size:1.05em}',
+            '.jellybutter-tvbar-sub{margin-top:.2em;font-size:.85em;color:rgba(255,255,255,.6)}',
+            '.jellybutter-tvbar-buttons{display:flex;align-items:center;gap:.5em;flex:none}',
+            '.jellybutter-tvbar-time{text-align:right;font-size:.9em;color:rgba(255,255,255,.7);font-variant-numeric:tabular-nums}',
             // jellyfin-web's footer (it holds the Now Playing bar) above the overlay, and pinned: its headroom
             // otherwise slides it away on scroll. Its own rule is z-index:1201!important.
             'html.jellybutter-bar .appfooter{z-index:100000!important;transform:none!important}'
@@ -419,7 +544,13 @@
         next: '<polyline points="9 18 15 12 9 6"/>',
         random: '<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>',
         lyrics: '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="11" x2="16" y2="11"/><line x1="4" y1="16" x2="18" y2="16"/><line x1="4" y1="21" x2="12" y2="21"/>',
-        close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
+        close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+        play: '<polygon points="6 4 20 12 6 20 6 4"/>',
+        pause: '<line x1="8" y1="5" x2="8" y2="19"/><line x1="16" y1="5" x2="16" y2="19"/>',
+        trackPrev: '<polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/>',
+        trackNext: '<polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/>',
+        rewind: '<polygon points="11 19 2 12 11 5 11 19"/><polygon points="22 19 13 12 22 5 22 19"/>',
+        forward: '<polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/>'
     };
 
     function button(className, label, svg, onClick) {
@@ -472,15 +603,57 @@
         ui.overlay.appendChild(ui.lyrics);
         ui.overlay.appendChild(ui.toast);
         ui.overlay.appendChild(ui.controls);
+        ui.overlay.appendChild(buildTvBar());
         ui.canvas.addEventListener('click', function () { showControls(); });
         ui.overlay.addEventListener('mousemove', showControls);
+        ui.overlay.addEventListener('focusin', showControls);
         document.body.appendChild(ui.overlay);
 
         window.addEventListener('keydown', onKeyDown, true);
         window.addEventListener('resize', resize);
     }
 
+    function buildTvBar() {
+        ui.tvBar = document.createElement('div');
+        ui.tvBar.className = 'jellybutter-tvbar';
+        ui.tvBar.setAttribute('role', 'group');
+        ui.tvBar.setAttribute('aria-label', 'Now playing');
+        var progress = document.createElement('div');
+        progress.className = 'jellybutter-tvbar-progress';
+        ui.tvFill = document.createElement('div');
+        ui.tvFill.className = 'jellybutter-tvbar-fill';
+        progress.appendChild(ui.tvFill);
+        ui.tvArt = document.createElement('img');
+        ui.tvArt.className = 'jellybutter-tvbar-art';
+        ui.tvArt.alt = '';
+        ui.tvArt.hidden = true;
+        var text = document.createElement('div');
+        text.className = 'jellybutter-tvbar-text';
+        ui.tvTitle = document.createElement('div');
+        ui.tvTitle.className = 'jellybutter-tvbar-title';
+        ui.tvSub = document.createElement('div');
+        ui.tvSub.className = 'jellybutter-tvbar-sub';
+        text.appendChild(ui.tvTitle);
+        text.appendChild(ui.tvSub);
+        var buttons = document.createElement('div');
+        buttons.className = 'jellybutter-tvbar-buttons';
+        ui.tvPrev = button('jellybutter-ctrl', 'Previous track', ICONS.trackPrev, function () { mediaAction('previoustrack'); });
+        ui.tvRewind = button('jellybutter-ctrl', 'Rewind', ICONS.rewind, function () { mediaAction('seekbackward'); });
+        ui.tvPlay = button('jellybutter-ctrl jellybutter-ctrl-main', 'Pause', ICONS.pause, playPause);
+        ui.tvForward = button('jellybutter-ctrl', 'Fast forward', ICONS.forward, function () { mediaAction('seekforward'); });
+        ui.tvNext = button('jellybutter-ctrl', 'Next track', ICONS.trackNext, function () { mediaAction('nexttrack'); });
+        [ui.tvPrev, ui.tvRewind, ui.tvPlay, ui.tvForward, ui.tvNext].forEach(function (b) { buttons.appendChild(b); });
+        ui.tvTime = document.createElement('div');
+        ui.tvTime.className = 'jellybutter-tvbar-time';
+        [progress, ui.tvArt, text, buttons, ui.tvTime].forEach(function (el) { ui.tvBar.appendChild(el); });
+        return ui.tvBar;
+    }
+
     var controlsTimer = 0;
+    function controlsShown() {
+        return ui.overlay.classList.contains('jellybutter-controls-shown');
+    }
+
     function showControls() {
         ui.overlay.classList.add('jellybutter-controls-shown');
         clearTimeout(controlsTimer);
@@ -781,6 +954,7 @@
         if (!state.open || !state.visualizer) { state.raf = 0; return; }
         try { state.visualizer.render(); } catch (e) { console.error('[Jellybutter] render failed', e); close(); return; }
         if (state.lyricsOn) { updateLyrics(false); }
+        if (state.tvBar) { updateTvBar(); }
         state.raf = requestAnimationFrame(render);
     }
 
@@ -837,7 +1011,7 @@
         state.lyrics.index = -2;
         state.lyrics.offset = null;
         if (!data) {
-            lyricsNote('No lyrics for this track.');
+            lyricsNote('No lyrics found');
             return;
         }
         ui.lyrics.textContent = '';
@@ -915,14 +1089,39 @@
     }
 
     function updateBarInset() {
+        if (state.tvBar) {
+            ui.overlay.style.setProperty('--jellybutter-bar', (state.open ? ui.tvBar.offsetHeight : 0) + 'px');
+            return;
+        }
         var bar = config.nowPlayingBar && state.open ? document.querySelector('.appfooter .nowPlayingBar') : null;
         var footer = bar && bar.closest('.appfooter');
         var inset = JellybutterCore.barInset(bar ? bar.className : null, footer ? footer.offsetHeight : 0);
         ui.overlay.style.setProperty('--jellybutter-bar', inset + 'px');
     }
 
+    // jellyfin-web never builds its bar in the TV layout (its module returns early there), so on a TV the
+    // visualizer shows a bar of its own, driven through jellyfin-web's Media Session handlers.
+    function isTvLayout() {
+        return document.documentElement.classList.contains('layout-tv');
+    }
+
     function showBar() {
         if (!config.nowPlayingBar) { return; }
+        if (isTvLayout()) {
+            state.tvBar = true;
+            ui.overlay.classList.add('jellybutter-tvbar-on');
+            ui.tvPrev.hidden = !mediaActions.previoustrack;
+            ui.tvRewind.hidden = !mediaActions.seekbackward;
+            ui.tvForward.hidden = !mediaActions.seekforward;
+            ui.tvNext.hidden = !mediaActions.nexttrack;
+            state.barMeta = undefined;
+            state.barPaused = null;
+            state.barTime = null;
+            state.barFraction = -1;
+            updateTvBar();
+            updateBarInset();
+            return;
+        }
         document.documentElement.classList.add('jellybutter-bar');
         tellBar(JellybutterCore.mediaControlFor(true, true, state.pageMediaControl));
         // jellyfin-web builds the bar on first show and toggles its classes as playback changes.
@@ -936,10 +1135,108 @@
 
     function hideBar() {
         if (!config.nowPlayingBar) { return; }
+        if (state.tvBar) {
+            state.tvBar = false;
+            ui.overlay.classList.remove('jellybutter-tvbar-on');
+            updateBarInset();
+            return;
+        }
         if (state.barObserver) { state.barObserver.disconnect(); state.barObserver = null; }
         document.documentElement.classList.remove('jellybutter-bar');
         tellBar(JellybutterCore.mediaControlFor(false, true, state.pageMediaControl));
         updateBarInset();
+    }
+
+    /** Runs one of jellyfin-web's Media Session handlers; false when it registered none for the action. */
+    function mediaAction(action) {
+        var handler = mediaActions[action];
+        if (!handler) { return false; }
+        try { handler({ action: action }); } catch (e) { console.error('[Jellybutter] media action ' + action + ' failed', e); }
+        return true;
+    }
+
+    function playPause() {
+        var audio = state.audio;
+        if (!audio) { return; }
+        if (mediaAction(audio.paused ? 'play' : 'pause')) { return; }
+        // No handler (a browser without Media Session): the element itself, which jellyfin-web follows.
+        if (audio.paused) {
+            var started = audio.play();
+            if (started && typeof started.catch === 'function') { started.catch(noop); }
+        } else {
+            audio.pause();
+        }
+    }
+
+    /** Brings the TV bar up to date; cheap enough for every frame, it writes only what changed. */
+    function updateTvBar() {
+        var session = navigator.mediaSession;
+        var meta = session ? session.metadata : null;
+        if (meta !== state.barMeta) {
+            state.barMeta = meta;
+            ui.tvTitle.textContent = (meta && meta.title) || '';
+            ui.tvSub.textContent = JellybutterCore.trackSubtitle(meta && meta.artist, meta && meta.album);
+            var art = meta ? JellybutterCore.pickArtwork(meta.artwork) : null;
+            ui.tvArt.hidden = !art;
+            if (art && ui.tvArt.getAttribute('src') !== art) { ui.tvArt.src = art; }
+        }
+        var audio = state.audio;
+        var paused = !audio || audio.paused;
+        if (paused !== state.barPaused) {
+            state.barPaused = paused;
+            ui.tvPlay.innerHTML = icon(paused ? ICONS.play : ICONS.pause);
+            ui.tvPlay.title = paused ? 'Play' : 'Pause';
+            ui.tvPlay.setAttribute('aria-label', ui.tvPlay.title);
+        }
+        var current = audio ? audio.currentTime : NaN;
+        var duration = audio ? audio.duration : NaN;
+        var known = isFinite(duration) && duration > 0;
+        var time = JellybutterCore.formatTime(current) + (known ? ' / ' + JellybutterCore.formatTime(duration) : '');
+        if (time !== state.barTime) {
+            state.barTime = time;
+            ui.tvTime.textContent = time;
+        }
+        var fraction = known ? Math.min(1, Math.max(0, current / duration)) : 0;
+        if (Math.abs(fraction - state.barFraction) >= 0.001) {
+            state.barFraction = fraction;
+            ui.tvFill.style.transform = 'scaleX(' + fraction + ')';
+        }
+    }
+
+    // ---- D-pad navigation ----------------------------------------------------------------------------------
+
+    // While the visualizer is open it owns the arrow, select and back keys, from the keyboard, a remote or a
+    // gamepad: jellyfin-web's own focus navigation would walk into the page under the overlay. Focus moves
+    // among the visualizer's buttons and the Now Playing bar's (jellyfin-web's, or the TV bar).
+    function focusables() {
+        var list = Array.prototype.slice.call(ui.overlay.querySelectorAll('button'));
+        if (config.nowPlayingBar && !state.tvBar) {
+            list = list.concat(Array.prototype.slice.call(document.querySelectorAll('.appfooter .nowPlayingBar button')));
+        }
+        return list.filter(function (b) { return !b.disabled && b.getClientRects().length > 0; });
+    }
+
+    function defaultFocus() {
+        return state.tvBar ? ui.tvPlay : ui.next;
+    }
+
+    function onNav(nav) {
+        if (nav === 'back') { close(); return; }
+        var wasShown = controlsShown();
+        showControls();
+        var items = focusables();
+        var current = document.activeElement;
+        var index = items.indexOf(current);
+        if (index < 0) {
+            var start = defaultFocus();
+            if (items.indexOf(start) >= 0) { start.focus({ preventScroll: true }); }
+            return;
+        }
+        // The first press after the controls faded only brings them back: the focused one was invisible.
+        if (!wasShown && ui.controls.contains(current)) { return; }
+        if (nav === 'select') { current.click(); return; }
+        var next = JellybutterCore.nextFocusIndex(current.getBoundingClientRect(), items.map(function (b) { return b.getBoundingClientRect(); }), nav);
+        if (next >= 0) { items[next].focus({ preventScroll: true }); }
     }
 
     // ---- Open / close --------------------------------------------------------------------------------------
@@ -978,7 +1275,7 @@
             render();
             showControls();
             refreshButtons();
-            moveFocus(ui.next);
+            moveFocus(defaultFocus());
         }, function (err) {
             opening = false;
             console.error('[Jellybutter]', err);
@@ -1042,6 +1339,15 @@
         if (e.defaultPrevented) { return; }
         var t = e.target;
         if (t && JellybutterCore.isTypingTarget(t.tagName, t.isContentEditable)) { return; }
+        var nav = state.open ? JellybutterCore.navKeyFor(e.key, e.keyCode, e) : null;
+        if (nav) {
+            // Prevented, so neither jellyfin-web's navigation, the browser's own activation of a focused
+            // button, nor jellyfin-web's click on releasing gamepad A acts on it a second time.
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            onNav(nav);
+            return;
+        }
         var action = JellybutterCore.hotkeyFor(e.key, state.open, state.trackLoaded, e);
         if (!action) { return; }
         e.preventDefault();

@@ -238,3 +238,62 @@ test('barInset: the footer height while the bar shows, nothing while it is missi
     assert.equal(core.barInset('nowPlayingBar', 0), 0);
     assert.equal(core.barInset('nowPlayingBar-hiddenish nowPlayingBar', 60), 60);    // whole class names only
 });
+
+test('navKeyFor: keyboard, remote and jellyfin-web gamepad keys map to the same moves', () => {
+    assert.equal(core.navKeyFor('ArrowLeft', 37), 'left');
+    assert.equal(core.navKeyFor('GamepadDPadRight', 39), 'right');           // jellyfin-web's gamepadtokey
+    assert.equal(core.navKeyFor('GamepadLeftThumbStickUp', 38), 'up');
+    assert.equal(core.navKeyFor('GamepadDPadDown', 40), 'down');
+    assert.equal(core.navKeyFor('Enter', 13), 'select');
+    assert.equal(core.navKeyFor('GamepadA', 13), 'select');
+    assert.equal(core.navKeyFor('GamepadB', 27), 'back');
+    assert.equal(core.navKeyFor('Escape', 27), 'back');
+    assert.equal(core.navKeyFor('Unidentified', 461), 'back');              // webOS remote Back
+    assert.equal(core.navKeyFor(undefined, 10009), 'back');                 // Tizen remote Back
+    assert.equal(core.navKeyFor('v', 86), null);                            // hotkeys stay hotkeys
+    assert.equal(core.navKeyFor('ArrowLeft', 37, { shiftKey: true }), null);
+    assert.equal(core.navKeyFor('Enter', 13, { ctrlKey: true }), null);
+});
+
+test('nextFocusIndex: moves along a row and between rows, -1 at an edge', () => {
+    const r = (left, top, w = 40, h = 40) => ({ left, top, right: left + w, bottom: top + h });
+    // Controls row at the right above a centered bar row.
+    const controls = [r(800, 400), r(850, 400), r(900, 400)];
+    const bar = [r(400, 500), r(450, 500), r(500, 500)];
+    const all = controls.concat(bar);
+    assert.equal(core.nextFocusIndex(controls[1], all, 'right'), 2);
+    assert.equal(core.nextFocusIndex(controls[1], all, 'left'), 0);
+    assert.equal(core.nextFocusIndex(controls[2], all, 'right'), -1);
+    assert.equal(core.nextFocusIndex(controls[0], all, 'down'), 5);         // nearest bar button, not the farthest
+    assert.equal(core.nextFocusIndex(bar[2], all, 'up'), 0);
+    assert.equal(core.nextFocusIndex(bar[0], all, 'left'), -1);
+    assert.equal(core.nextFocusIndex(bar[2], all, 'right'), 0);             // in the controls row's direction
+    // Hidden buttons (no box) are never chosen.
+    assert.equal(core.nextFocusIndex(bar[0], [bar[0], r(450, 500, 0, 0), bar[2]], 'right'), 2);
+    assert.equal(core.nextFocusIndex(bar[0], all, 'sideways'), -1);
+    assert.equal(core.nextFocusIndex(null, all, 'left'), -1);
+});
+
+test('formatTime: m:ss, h:mm:ss from an hour, empty when unknown', () => {
+    assert.equal(core.formatTime(0), '0:00');
+    assert.equal(core.formatTime(65.9), '1:05');
+    assert.equal(core.formatTime(3725), '1:02:05');
+    assert.equal(core.formatTime(NaN), '');
+    assert.equal(core.formatTime(Infinity), '');                            // a stream's duration
+    assert.equal(core.formatTime(-1), '');
+});
+
+test('pickArtwork: the largest image, null without any', () => {
+    assert.equal(core.pickArtwork([{ src: 'a', sizes: '96x96' }, { src: 'b', sizes: '512x512' }, { src: 'c', sizes: '256x256' }]), 'b');
+    assert.equal(core.pickArtwork([{ src: 'only' }]), 'only');
+    assert.equal(core.pickArtwork([{ sizes: '512x512' }]), null);
+    assert.equal(core.pickArtwork([]), null);
+    assert.equal(core.pickArtwork(undefined), null);
+});
+
+test('trackSubtitle: artist and album, whichever are known', () => {
+    assert.equal(core.trackSubtitle('Mastodon', 'Blood Mountain'), 'Mastodon — Blood Mountain');
+    assert.equal(core.trackSubtitle('Mastodon', ''), 'Mastodon');
+    assert.equal(core.trackSubtitle(undefined, 'Blood Mountain'), 'Blood Mountain');
+    assert.equal(core.trackSubtitle('  ', null), '');
+});

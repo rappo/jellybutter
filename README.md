@@ -25,11 +25,16 @@ repository, updated from there; nothing to install on any client.
   opens with or without lyrics; `l` or the Lyrics button toggles them while it is open.
 - The web client's own **Now Playing bar** (artwork, track, artist, playback controls, volume) stays along
   the bottom of the visualizer, live, from whichever page it was opened (setting, on by default). The TV
-  layout has no Now Playing bar, so there the visualizer stays full screen.
+  layout has no Now Playing bar of its own, so there the visualizer shows one: artwork, track, artist and
+  album, previous, rewind, play/pause, fast forward and next, and the time.
+- **D-pad and controller:** while the visualizer is open, the arrow keys, a remote's D-pad, or a gamepad
+  (with jellyfin-web's "Enable gamepad" setting, or a Steam Input layout sending arrows, Enter and
+  Escape) wake the on-screen controls and move between them and the Now Playing bar's buttons; Enter or A
+  presses, Back, Escape or B closes.
 - **Hotkeys:** `v` toggles the visualizer, `l` toggles lyrics, `b` next preset, `n` previous preset,
   `Escape` closes. A Steam Input layout that maps paddles to `v`, `b` and `n` drives it from a
-  controller. On-screen buttons for previous, random, next, lyrics and close appear on hover or when
-  focused.
+  controller. On-screen buttons for previous, random, next, lyrics and close appear on hover or on any
+  key, and fade after a moment.
 - **Jellyfin Desktop:** the desktop client plays music through mpv, which a web page cannot hear. With the
   "Play music in the web player on Jellyfin Desktop" setting (on by default) the plugin hides the mpv
   audio player from the web client, so music plays through the web player and the visualizer hears it.
@@ -65,7 +70,7 @@ Dashboard > Plugins > Jellybutter Visualizer.
 | Blend between presets (seconds) | 2.7 | 0 switches instantly. |
 | Visualizer button in the Now Playing controls | on | The icon button between Lyrics and Shuffle. |
 | Floating visualizer button on other pages | on | The round button at the bottom right wherever the Now Playing controls are not on screen. |
-| Now Playing bar under the visualizer | on | jellyfin-web's playback bar along the bottom while the visualizer is open. |
+| Now Playing bar under the visualizer | on | jellyfin-web's playback bar along the bottom while the visualizer is open (the visualizer's own in the TV layout). |
 | Opens as | Visualizer only | Or "Visualizer with lyrics". `l` switches lyrics on and off either way. |
 | Lyrics text size | Medium | Small, Medium or Large. |
 

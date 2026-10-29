@@ -56,11 +56,20 @@ npm ci                      # once; fetches the pinned Butterchurn bundles
 npm test                    # node:test over tests/
 dotnet test                 # restores Jellyfin 12.2.0 packages from NuGet, builds, runs xunit
 dotnet publish Jellyfin.Plugin.Jellybutter -c Release -o dist   # dist/Jellyfin.Plugin.Jellybutter.dll
+docker build --target artifact -o dist .   # CI's build: analyzers, xunit and the zip contents, no local .NET
 ```
+
+The Docker build needs `node_modules` in its context (`npm ci` first); the Dockerfile stops with "run npm ci
+before docker build" otherwise.
 
 A plugin folder for a server is `Jellyfin.Plugin.Jellybutter.dll` + `meta.json` under
 `<data>/plugins/Jellybutter Visualizer_<version>/`. Jellyfin reads `targetAbi` from meta.json and refuses a plugin built
 for a newer ABI than the server.
+
+Installing by hand (no API access) means doing what Jellyfin's installer does: unpack the release zip into
+`<data>/plugins/<manifest name>_<version>/`, give that folder's `meta.json` `"status": "Active"`, set the
+previous version's `meta.json` to `"status": "Superseded"` (Jellyfin skips it; with a different folder name,
+startup cleanup never removes it), and restart. Without the Superseded mark both versions share the GUID.
 
 ### Local end-to-end check without Docker
 
@@ -182,6 +191,16 @@ The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_T
 
 ## Lessons
 
+- 2026-10-29: Adding a field to `ClientSettings` broke the build (CS7036) in tests a search for
+  `new ClientSettings(` missed: one constructs it with named arguments, one with a target-typed `new(...)`.
+  Search for all three forms when its parameter list changes.
+- 2026-10-29: Read jellyfin-web behavior from the bundles the server actually serves, not from GitHub
+  source. Lazily loaded chunks are not in `main.jellyfin.bundle.js`; their file names are in
+  `runtime.bundle.js` (`<id>:"<hash>"`, served as `<id>.<hash>.chunk.js`). The gamepad translation
+  (gamepadtokey, chunk 84348 in 12.4) loads only with the client's "Enable gamepad" setting on.
+- 2026-10-29: Check every client feature in both the desktop and the TV layout. 1.2.0.0 shipped with no
+  Now Playing bar and no way to wake the controls on a TV: jellyfin-web never builds the bar in the TV
+  layout, and its D-pad focus manager moved focus into the page under the overlay.
 - 2026-10-29: Renamed from "Milkdrop Visualizer" (`Jellyfin.Plugin.Milkdrop`, repo `jellyfin-plugin-milkdrop`)
   to "Jellybutter Visualizer" in 1.2.0.0; the GUID stays, which is what makes it an update. Jellyfin 12.2
   facts behind the migration (`BasePluginOfT.cs`, `PluginManager.cs`, `InstallationManager.cs` at v12.2):

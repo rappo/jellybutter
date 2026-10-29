@@ -1,4 +1,4 @@
-# Milkdrop Visualizer for Jellyfin
+# Jellybutter
 
 A [Butterchurn](https://github.com/jberg/butterchurn) (MilkDrop 2, WebGL) music visualizer inside the
 Jellyfin web client, and inside Jellyfin Desktop. One server plugin, installed once from a plugin
@@ -23,6 +23,9 @@ repository, updated from there; nothing to install on any client.
   upcoming lines below, with a smooth move on every change. Unsynced lyrics sit as a block, centered when
   they fit and scrolled with playback progress when they do not. A setting picks whether the visualizer
   opens with or without lyrics; `l` or the Lyrics button toggles them while it is open.
+- The web client's own **Now Playing bar** (artwork, track, artist, playback controls, volume) stays along
+  the bottom of the visualizer, live, from whichever page it was opened (setting, on by default). The TV
+  layout has no Now Playing bar, so there the visualizer stays full screen.
 - **Hotkeys:** `v` toggles the visualizer, `l` toggles lyrics, `b` next preset, `n` previous preset,
   `Escape` closes. A Steam Input layout that maps paddles to `v`, `b` and `n` drives it from a
   controller. On-screen buttons for previous, random, next, lyrics and close appear on hover or when
@@ -39,16 +42,20 @@ repository, updated from there; nothing to install on any client.
 The one manual step: add the plugin repository to your server.
 
 1. Dashboard > Plugins > Repositories > **+**
-2. Name: `Milkdrop`, URL: `http://argos.lan.rappo.me:3210/rappo/jellyfin-plugin-milkdrop/raw/branch/main/manifest.json`
-3. Dashboard > Plugins > Catalog > **Milkdrop Visualizer** > Install, then restart the server.
+2. Name: `Jellybutter`, URL: `http://argos.lan.rappo.me:3210/rappo/jellybutter/raw/branch/main/manifest.json`
+3. Dashboard > Plugins > Catalog > **Jellybutter Visualizer** > Install, then restart the server.
 
 Jellyfin checks the repository for updates on its own schedule and installs them like any other plugin.
 
 Requires Jellyfin 12.2 or later (target ABI 12.2.0.0).
 
+Up to 1.1.0.0 the plugin was called **Milkdrop Visualizer** and lived at `rappo/jellyfin-plugin-milkdrop`. A
+server with the old repository URL keeps updating (Forgejo redirects the old path); 1.2.0.0 copies the old
+settings over on its first start. Point the repository at the URL above when convenient.
+
 ## Settings
 
-Dashboard > Plugins > Milkdrop Visualizer.
+Dashboard > Plugins > Jellybutter Visualizer.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
@@ -58,6 +65,7 @@ Dashboard > Plugins > Milkdrop Visualizer.
 | Blend between presets (seconds) | 2.7 | 0 switches instantly. |
 | Visualizer button in the Now Playing controls | on | The icon button between Lyrics and Shuffle. |
 | Floating visualizer button on other pages | on | The round button at the bottom right wherever the Now Playing controls are not on screen. |
+| Now Playing bar under the visualizer | on | jellyfin-web's playback bar along the bottom while the visualizer is open. |
 | Opens as | Visualizer only | Or "Visualizer with lyrics". `l` switches lyrics on and off either way. |
 | Lyrics text size | Medium | Small, Medium or Large. |
 

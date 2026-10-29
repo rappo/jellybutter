@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using Jellyfin.Plugin.Milkdrop.Configuration;
+using Jellyfin.Plugin.Jellybutter.Configuration;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
+using Microsoft.Extensions.Logging;
 
-namespace Jellyfin.Plugin.Milkdrop;
+namespace Jellyfin.Plugin.Jellybutter;
 
 /// <summary>
 /// Adds a Butterchurn (MilkDrop 2) music visualizer to the Jellyfin web client.
@@ -19,10 +20,17 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// </summary>
     /// <param name="applicationPaths">Instance of the <see cref="IApplicationPaths"/> interface.</param>
     /// <param name="xmlSerializer">Instance of the <see cref="IXmlSerializer"/> interface.</param>
-    public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
+    /// <param name="logger">Instance of the <see cref="ILogger{Plugin}"/> interface.</param>
+    public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer, ILogger<Plugin> logger)
         : base(applicationPaths, xmlSerializer)
     {
         Instance = this;
+
+        // Before anything reads Configuration (it loads lazily): the settings saved under the old name.
+        if (LegacyConfiguration.CopyIfMissing(applicationPaths.PluginConfigurationsPath, ConfigurationFileName))
+        {
+            logger.LogInformation("Jellybutter: settings carried over from {Legacy}.", LegacyConfiguration.FileName);
+        }
     }
 
     /// <summary>
@@ -31,7 +39,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public static Plugin? Instance { get; private set; }
 
     /// <inheritdoc />
-    public override string Name => "Milkdrop Visualizer";
+    public override string Name => "Jellybutter Visualizer";
 
     /// <inheritdoc />
     public override string Description =>
@@ -51,7 +59,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
         yield return new PluginPageInfo
         {
-            Name = "MilkdropConfig",
+            Name = "JellybutterConfig",
             EmbeddedResourcePath = string.Format(CultureInfo.InvariantCulture, "{0}.Configuration.configPage.html", GetType().Namespace)
         };
     }

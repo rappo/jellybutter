@@ -4,14 +4,14 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-using Jellyfin.Plugin.Milkdrop.WebUi;
+using Jellyfin.Plugin.Jellybutter.WebUi;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Net.Http.Headers;
 using Xunit;
 
-namespace Jellyfin.Plugin.Milkdrop.Tests;
+namespace Jellyfin.Plugin.Jellybutter.Tests;
 
 // The middleware serves index.html with the client script added and gives that rewritten document validators
 // of its own. The host's static-file handler stands behind it, so each test plays that handler with a fake next.
@@ -19,7 +19,7 @@ public class ScriptInjectionMiddlewareTests
 {
     private const string HostHtml = "<html><body><h1>jellyfin</h1></body></html>";
     private static readonly DateTimeOffset _hostModified = new(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
-    private static readonly ClientSettings _settings = new(true, 30, 2.7, true, true, "visualizer", "medium");
+    private static readonly ClientSettings _settings = new(true, 30, 2.7, true, true, true, "visualizer", "medium");
 
     private static ScriptInjection Middleware(bool enabled = true)
         => new(NullLogger<ScriptInjection>.Instance, () => enabled ? _settings : null);
@@ -70,7 +70,7 @@ public class ScriptInjectionMiddlewareTests
 
         Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
         Assert.Contains(IndexHtmlInjector.Marker, Body(context), StringComparison.Ordinal);
-        Assert.Contains("Milkdrop/client.js?v=", Body(context), StringComparison.Ordinal);
+        Assert.Contains("Jellybutter/client.js?v=", Body(context), StringComparison.Ordinal);
 
         var bytes = Encoding.UTF8.GetBytes(Body(context));
         Assert.Equal("\"" + Convert.ToHexStringLower(SHA256.HashData(bytes)) + "\"", TagOf(context));
@@ -98,7 +98,7 @@ public class ScriptInjectionMiddlewareTests
         var before = await Serve(Request());
         var context = Request(ifNoneMatch: TagOf(before));
 
-        await new ScriptInjection(NullLogger<ScriptInjection>.Instance, () => new ClientSettings(false, 30, 2.7, true, true, "visualizer", "medium")).InvokeAsync(context, () => Host(context));
+        await new ScriptInjection(NullLogger<ScriptInjection>.Instance, () => new ClientSettings(false, 30, 2.7, true, true, true, "visualizer", "medium")).InvokeAsync(context, () => Host(context));
 
         Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
         Assert.NotEqual(TagOf(before), TagOf(context));

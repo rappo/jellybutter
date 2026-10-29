@@ -1,23 +1,23 @@
 using System;
 using System.Net;
 using System.Text.Json;
-using Jellyfin.Plugin.Milkdrop.WebUi;
+using Jellyfin.Plugin.Jellybutter.WebUi;
 using Xunit;
 
-namespace Jellyfin.Plugin.Milkdrop.Tests;
+namespace Jellyfin.Plugin.Jellybutter.Tests;
 
 public class IndexHtmlInjectorTests
 {
     private const string Index = "<!doctype html><html><head><title>Jellyfin</title></head><body><div id=\"reactRoot\"></div><script defer=\"defer\" src=\"main.jellyfin.bundle.js\"></script></body></html>";
 
-    private static readonly ClientSettings _settings = new(DesktopWebAudio: true, CycleSeconds: 30, BlendSeconds: 2.7, ControlButton: true, FloatingButton: true, DefaultView: "visualizer", LyricsSize: "medium");
+    private static readonly ClientSettings _settings = new(DesktopWebAudio: true, CycleSeconds: 30, BlendSeconds: 2.7, ControlButton: true, FloatingButton: true, NowPlayingBar: true, DefaultView: "visualizer", LyricsSize: "medium");
 
     [Fact]
     public void Inject_AddsTheTagBeforeBodyClose_Once()
     {
         var once = IndexHtmlInjector.Inject(Index, "1.2.3.4", _settings);
 
-        Assert.Contains("src=\"../Milkdrop/client.js?v=1.2.3.4\"", once, StringComparison.Ordinal);
+        Assert.Contains("src=\"../Jellybutter/client.js?v=1.2.3.4\"", once, StringComparison.Ordinal);
         Assert.Contains(IndexHtmlInjector.Marker, once, StringComparison.Ordinal);
         Assert.EndsWith("</script>\n</body></html>", once, StringComparison.Ordinal);
 
@@ -38,7 +38,7 @@ public class IndexHtmlInjectorTests
     [Fact]
     public void ScriptTag_CarriesTheSettingsAsHtmlSafeJson_ThatDecodesBack()
     {
-        var tag = IndexHtmlInjector.ScriptTag("1.0", new ClientSettings(false, 45, 1.5, true, true, "visualizer", "medium"));
+        var tag = IndexHtmlInjector.ScriptTag("1.0", new ClientSettings(false, 45, 1.5, true, true, true, "visualizer", "medium"));
 
         // The JSON's own quotes are entity-encoded so the attribute's quotes survive.
         Assert.DoesNotContain("{\"", tag, StringComparison.Ordinal);

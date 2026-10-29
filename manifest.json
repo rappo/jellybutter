@@ -6,7 +6,7 @@
                 "version": "1.1.0.0",
                 "changelog": "1.1.0.0 - A visualizer button in the Now Playing controls (between Lyrics and Shuffle); a lyrics view over the visualizer (l key, Lyrics button) fed by Jellyfin's Lyrics API; settings for the buttons, the opening view and the lyrics size.\n1.0.1.0 - Settings page: the version label works and help tooltips stay inside the window.\n1.0.0.0 - First release: Butterchurn visualizer with auto-cycling presets, hotkeys, a focusable toggle button, and web-player audio on Jellyfin Desktop.",
                 "targetAbi": "12.2.0.0",
-                "sourceUrl": "http://argos.lan.rappo.me:3210/rappo/jellyfin-plugin-milkdrop/releases/download/v1.1.0.0/jellyfin-plugin-milkdrop_1.1.0.0.zip",
+                "sourceUrl": "http://argos.lan.rappo.me:3210/rappo/jellybutter/releases/download/v1.1.0.0/jellyfin-plugin-milkdrop_1.1.0.0.zip",
                 "checksum": "141017b9a73499f369022222b1cb1797",
                 "timestamp": "2026-10-28T03:14:16Z"
             },
@@ -14,7 +14,7 @@
                 "version": "1.0.1.0",
                 "changelog": "1.0.1.0 - Settings page: the version label works and help tooltips stay inside the window.\n1.0.0.0 - First release: Butterchurn visualizer with auto-cycling presets, hotkeys, a focusable toggle button, and web-player audio on Jellyfin Desktop.",
                 "targetAbi": "12.2.0.0",
-                "sourceUrl": "http://argos.lan.rappo.me:3210/rappo/jellyfin-plugin-milkdrop/releases/download/v1.0.1.0/jellyfin-plugin-milkdrop_1.0.1.0.zip",
+                "sourceUrl": "http://argos.lan.rappo.me:3210/rappo/jellybutter/releases/download/v1.0.1.0/jellyfin-plugin-milkdrop_1.0.1.0.zip",
                 "checksum": "79da665e5226a18bb5a30eff43cd17fd",
                 "timestamp": "2026-10-28T01:02:43Z"
             },
@@ -22,12 +22,12 @@
                 "version": "1.0.0.0",
                 "changelog": "1.0.0.0 - First release: Butterchurn visualizer with auto-cycling presets, hotkeys, a focusable toggle button, and web-player audio on Jellyfin Desktop.",
                 "targetAbi": "12.2.0.0",
-                "sourceUrl": "http://argos.lan.rappo.me:3210/rappo/jellyfin-plugin-milkdrop/releases/download/v1.0.0.0/jellyfin-plugin-milkdrop_1.0.0.0.zip",
+                "sourceUrl": "http://argos.lan.rappo.me:3210/rappo/jellybutter/releases/download/v1.0.0.0/jellyfin-plugin-milkdrop_1.0.0.0.zip",
                 "checksum": "fac1db554c36ac13fe0e7785ee557915",
                 "timestamp": "2026-10-28T00:57:27Z"
             }
         ],
-        "name": "Milkdrop Visualizer",
+        "name": "Jellybutter Visualizer",
         "description": "Adds a Butterchurn (MilkDrop 2, WebGL) visualizer to the Jellyfin web client. A button in the Now Playing controls (and a floating one elsewhere) opens it full screen with random presets that cycle automatically, optionally with the track's lyrics over it, and keyboard shortcuts (v toggle, l lyrics, b next, n previous, Escape close) that a controller layout can map to. On Jellyfin Desktop, music is routed through the web player so the visualizer can hear it while video stays on mpv. Everything is served by the plugin; nothing is loaded from the internet.",
         "overview": "A MilkDrop 2 music visualizer (Butterchurn) inside the Jellyfin web client and Jellyfin Desktop.",
         "owner": "rappo",

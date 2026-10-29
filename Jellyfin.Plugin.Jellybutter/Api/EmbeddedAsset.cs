@@ -4,7 +4,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using Microsoft.Net.Http.Headers;
 
-namespace Jellyfin.Plugin.Milkdrop.Api;
+namespace Jellyfin.Plugin.Jellybutter.Api;
 
 /// <summary>
 /// A file compiled into the plugin, with the validators to serve it as one: an ETag that is its content hash

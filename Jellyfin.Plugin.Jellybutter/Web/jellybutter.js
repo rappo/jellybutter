@@ -1,5 +1,5 @@
 /*
- * Milkdrop Visualizer for Jellyfin: a Butterchurn (MilkDrop 2, WebGL) visualizer for jellyfin-web.
+ * Jellybutter Visualizer for Jellyfin: a Butterchurn (MilkDrop 2, WebGL) visualizer for jellyfin-web.
  *
  * Loaded by the script tag the plugin adds to index.html. Plain JavaScript, no framework, no build step.
  * The tag's data-config attribute carries the plugin settings as JSON. The script:
@@ -23,10 +23,13 @@
  *   - Lyrics view: the track's lyrics from Jellyfin's Lyrics API over the visualizer. Synced lyrics follow
  *     the audio element's clock with the current line large and glowing; unsynced lyrics sit as a block,
  *     centered when they fit and scrolled with playback progress when they do not.
+ *   - Now Playing bar: jellyfin-web's own bar along the bottom of the visualizer, live, on every page. jellyfin-web
+ *     shows it only on views whose options allow media control, read from the viewbeforeshow event on the
+ *     document; opening tells it "allowed" with that same event and closing hands back the page's own value.
  *   - Hotkeys: v toggles the visualizer, l toggles lyrics, b next preset, n previous preset, Escape closes.
  *     Ignored while typing in a field.
  *
- * The pure helpers live on MilkdropCore and are exported for the node:test suite under tests/; the DOM
+ * The pure helpers live on JellybutterCore and are exported for the node:test suite under tests/; the DOM
  * part only runs in a browser.
  */
 (function () {
@@ -38,6 +41,7 @@
         blendSeconds: 2.7,
         controlButton: true,
         floatingButton: true,
+        nowPlayingBar: true,
         defaultView: 'visualizer',
         lyricsSize: 'medium'
     };
@@ -52,7 +56,7 @@
         return allowed.indexOf(v) >= 0 ? v : fallback;
     }
 
-    var MilkdropCore = {
+    var JellybutterCore = {
         /**
          * Parses the data-config JSON, filling in a default for anything missing or malformed, so a tag
          * from an older or newer plugin version still yields usable settings.
@@ -72,6 +76,7 @@
                 blendSeconds: isFinite(blend) && blend >= 0 ? blend : DEFAULTS.blendSeconds,
                 controlButton: flag('controlButton'),
                 floatingButton: flag('floatingButton'),
+                nowPlayingBar: flag('nowPlayingBar'),
                 defaultView: pickOne(parsed.defaultView, VIEWS, DEFAULTS.defaultView),
                 lyricsSize: pickOne(parsed.lyricsSize, LYRICS_SIZES, DEFAULTS.lyricsSize)
             };
@@ -191,6 +196,27 @@
             return list.length;
         },
 
+        /**
+         * The enableMediaControl value jellyfin-web's Now Playing bar should be given: allowed while the
+         * visualizer is open with the bar setting on, else whatever the current page allows (unknown counts
+         * as allowed, jellyfin-web's own starting value).
+         */
+        mediaControlFor: function (open, barSetting, pageAllows) {
+            return open && barSetting ? true : pageAllows !== false;
+        },
+
+        /**
+         * How much of the bottom of the visualizer the Now Playing bar covers, in pixels: its footer's height
+         * while the bar is shown, nothing while it is missing, hidden (`hide`) or slid away
+         * (`nowPlayingBar-hidden`).
+         */
+        barInset: function (barClassName, footerHeight) {
+            if (typeof barClassName !== 'string') { return 0; }
+            var classes = ' ' + barClassName + ' ';
+            if (classes.indexOf(' hide ') >= 0 || classes.indexOf(' nowPlayingBar-hidden ') >= 0) { return 0; }
+            return footerHeight > 0 ? Math.round(footerHeight) : 0;
+        },
+
         /** The item id in a jellyfin-web audio URL (Audio/{id}/universal, Audio/{id}/stream.flac, ...). */
         itemIdFromSrc: function (src) {
             if (typeof src !== 'string') { return null; }
@@ -257,7 +283,7 @@
     };
 
     if (typeof module === 'object' && module && module.exports) {
-        module.exports = MilkdropCore;
+        module.exports = JellybutterCore;
     }
     if (typeof document === 'undefined' || typeof window === 'undefined') {
         return;
@@ -266,13 +292,13 @@
     // ---- Runtime ----------------------------------------------------------------------------------------
 
     var scriptEl = document.currentScript;
-    var config = MilkdropCore.parseConfig(scriptEl && scriptEl.getAttribute('data-config'));
+    var config = JellybutterCore.parseConfig(scriptEl && scriptEl.getAttribute('data-config'));
     var scriptSrc = scriptEl && scriptEl.src;
     var version = (function () {
         var m = /[?&]v=([^&]*)/.exec(scriptSrc || '');
         return m ? decodeURIComponent(m[1]) : '';
     })();
-    var assetBase = MilkdropCore.assetBase(scriptSrc) || 'Milkdrop/';
+    var assetBase = JellybutterCore.assetBase(scriptSrc) || 'Jellybutter/';
 
     // Jellyfin Desktop: must run now, before jellyfin-web's deferred bundles load its plugins and ask for
     // the device profile. Two wraps: the plugin list loses the mpv audio player, and the device profile
@@ -280,14 +306,14 @@
     // first argument, which is how the browser's profile is obtained here).
     (function patchNativeShell() {
         var shell = window.NativeShell;
-        if (!shell || typeof shell.getPlugins !== 'function' || shell.__milkdropWrapped || !config.desktopWebAudio) { return; }
+        if (!shell || typeof shell.getPlugins !== 'function' || shell.__jellybutterWrapped || !config.desktopWebAudio) { return; }
         var originalPlugins = shell.getPlugins;
         shell.getPlugins = function () {
             var list = originalPlugins.apply(this, arguments);
             if (list && typeof list.then === 'function') {
-                return list.then(function (resolved) { return MilkdropCore.filterNativePlugins(resolved, config); });
+                return list.then(function (resolved) { return JellybutterCore.filterNativePlugins(resolved, config); });
             }
-            return MilkdropCore.filterNativePlugins(list, config);
+            return JellybutterCore.filterNativePlugins(list, config);
         };
         var host = shell.AppHost;
         if (host && typeof host.getDeviceProfile === 'function') {
@@ -296,12 +322,12 @@
                 var result = originalProfile.apply(this, arguments);
                 var browser = null;
                 try { browser = typeof profileBuilder === 'function' ? profileBuilder({}) : null; } catch (e) { browser = null; }
-                var merge = function (profile) { return MilkdropCore.mergeAudioProfile(profile, browser); };
+                var merge = function (profile) { return JellybutterCore.mergeAudioProfile(profile, browser); };
                 return result && typeof result.then === 'function' ? result.then(merge) : merge(result);
             };
         }
-        shell.__milkdropWrapped = true;
-        console.info('[Milkdrop] Jellyfin Desktop: music will play through the web player so the visualizer can hear it.');
+        shell.__jellybutterWrapped = true;
+        console.info('[Jellybutter] Jellyfin Desktop: music will play through the web player so the visualizer can hear it.');
     })();
 
     var state = {
@@ -324,56 +350,61 @@
         stopTimer: 0,
         libs: null,             // Promise for the bundles
         unsupported: false,     // set once the browser proved it has no WebGL 2
-        lastFocus: null
+        lastFocus: null,
+        pageMediaControl: null, // enableMediaControl of the page jellyfin-web last showed; null until one shows
+        barObserver: null       // watches the Now Playing bar while the visualizer shows it
     };
 
     var ui = {};
 
     function css() {
         var style = document.createElement('style');
-        style.id = 'milkdrop-style';
+        style.id = 'jellybutter-style';
         style.textContent = [
-            '.milkdrop-toggle-wrap{position:fixed;right:1.5em;bottom:6.5em;z-index:9998;display:none}',
-            '.milkdrop-toggle-wrap.milkdrop-visible{display:block}',
-            '.milkdrop-toggle{width:3em;height:3em;border-radius:50%;border:none;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 .15em .8em rgba(0,0,0,.5);transition:background .2s,transform .15s;padding:0}',
-            '.milkdrop-toggle:hover,.milkdrop-toggle:focus{background:rgba(0,164,220,.85);outline:none;transform:scale(1.1)}',
-            '.milkdrop-toggle:focus-visible{box-shadow:0 0 0 .2em #fff}',
-            '.milkdrop-toggle svg{width:1.5em;height:1.5em}',
-            '.milkdrop-overlay{position:fixed;inset:0;z-index:99999;background:#000;display:none;font-family:inherit}',
-            '.milkdrop-overlay.milkdrop-open{display:block}',
-            '.milkdrop-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}',
-            '.milkdrop-toast{position:absolute;top:1em;left:1em;padding:.5em .9em;background:rgba(0,0,0,.55);color:#fff;border-radius:.5em;font:600 .95em/1.3 sans-serif;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .3s}',
-            '.milkdrop-toast.milkdrop-shown{opacity:1}',
-            '.milkdrop-toast small{display:block;font-weight:400;font-size:.75em;color:rgba(255,255,255,.55)}',
-            '.milkdrop-controls{position:absolute;right:1em;bottom:1em;display:flex;gap:.3em;opacity:0;transition:opacity .3s}',
-            '.milkdrop-overlay:hover .milkdrop-controls,.milkdrop-controls:focus-within,.milkdrop-overlay.milkdrop-controls-shown .milkdrop-controls{opacity:1}',
-            '.milkdrop-ctrl{width:2.4em;height:2.4em;border:none;border-radius:50%;background:rgba(0,0,0,.5);color:rgba(255,255,255,.85);font-size:1em;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}',
-            '.milkdrop-ctrl:hover,.milkdrop-ctrl:focus{background:rgba(0,164,220,.85);color:#fff;outline:none}',
-            '.milkdrop-ctrl:focus-visible{box-shadow:0 0 0 .2em #fff}',
-            '.milkdrop-ctrl[aria-pressed="true"]{background:rgba(0,164,220,.55);color:#fff}',
-            '.milkdrop-ctrl svg{width:1.2em;height:1.2em}',
+            '.jellybutter-toggle-wrap{position:fixed;right:1.5em;bottom:6.5em;z-index:9998;display:none}',
+            '.jellybutter-toggle-wrap.jellybutter-visible{display:block}',
+            '.jellybutter-toggle{width:3em;height:3em;border-radius:50%;border:none;background:rgba(0,0,0,.65);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 .15em .8em rgba(0,0,0,.5);transition:background .2s,transform .15s;padding:0}',
+            '.jellybutter-toggle:hover,.jellybutter-toggle:focus{background:rgba(0,164,220,.85);outline:none;transform:scale(1.1)}',
+            '.jellybutter-toggle:focus-visible{box-shadow:0 0 0 .2em #fff}',
+            '.jellybutter-toggle svg{width:1.5em;height:1.5em}',
+            '.jellybutter-overlay{position:fixed;inset:0;z-index:99999;background:#000;display:none;font-family:inherit}',
+            '.jellybutter-overlay.jellybutter-open{display:block}',
+            '.jellybutter-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}',
+            '.jellybutter-toast{position:absolute;top:1em;left:1em;padding:.5em .9em;background:rgba(0,0,0,.55);color:#fff;border-radius:.5em;font:600 .95em/1.3 sans-serif;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .3s}',
+            '.jellybutter-toast.jellybutter-shown{opacity:1}',
+            '.jellybutter-toast small{display:block;font-weight:400;font-size:.75em;color:rgba(255,255,255,.55)}',
+            '.jellybutter-controls{position:absolute;right:1em;bottom:calc(1em + var(--jellybutter-bar,0px));display:flex;gap:.3em;opacity:0;transition:opacity .3s}',
+            '.jellybutter-overlay:hover .jellybutter-controls,.jellybutter-controls:focus-within,.jellybutter-overlay.jellybutter-controls-shown .jellybutter-controls{opacity:1}',
+            '.jellybutter-ctrl{width:2.4em;height:2.4em;border:none;border-radius:50%;background:rgba(0,0,0,.5);color:rgba(255,255,255,.85);font-size:1em;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}',
+            '.jellybutter-ctrl:hover,.jellybutter-ctrl:focus{background:rgba(0,164,220,.85);color:#fff;outline:none}',
+            '.jellybutter-ctrl:focus-visible{box-shadow:0 0 0 .2em #fff}',
+            '.jellybutter-ctrl[aria-pressed="true"]{background:rgba(0,164,220,.55);color:#fff}',
+            '.jellybutter-ctrl svg{width:1.2em;height:1.2em}',
             // Lyrics layer: a column over the canvas, faded at the top and bottom edges, never catching
             // the pointer. Sizes are em of the overlay so the TV layout's larger root font scales them.
-            '.milkdrop-lyrics{position:absolute;inset:0;display:none;overflow:hidden;pointer-events:none;text-align:center;' +
+            '.jellybutter-lyrics{position:absolute;inset:0 0 var(--jellybutter-bar,0px) 0;display:none;overflow:hidden;pointer-events:none;text-align:center;' +
                 '-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 12%,#000 88%,transparent 100%);mask-image:linear-gradient(180deg,transparent 0,#000 12%,#000 88%,transparent 100%)}',
-            '.milkdrop-overlay.milkdrop-lyrics-on .milkdrop-lyrics{display:block}',
-            '.milkdrop-lyrics-small{--milkdrop-line:1.25em;--milkdrop-active:1.9em}',
-            '.milkdrop-lyrics-medium{--milkdrop-line:1.6em;--milkdrop-active:2.5em}',
-            '.milkdrop-lyrics-large{--milkdrop-line:2em;--milkdrop-active:3.2em}',
-            '.milkdrop-lyrics-scroll{position:absolute;left:8vw;right:8vw;top:0;will-change:transform}',
-            '.milkdrop-lyrics-synced .milkdrop-lyrics-scroll{transition:transform .5s cubic-bezier(.2,.7,.2,1)}',
-            '.milkdrop-lyrics-block{position:absolute;left:8vw;right:8vw;top:50%;transform:translateY(-50%)}',
-            '.milkdrop-lyrics-block.milkdrop-lyrics-tall{top:0;transform:none;padding:12vh 0}',
+            '.jellybutter-overlay.jellybutter-lyrics-on .jellybutter-lyrics{display:block}',
+            '.jellybutter-lyrics-small{--jellybutter-line:1.25em;--jellybutter-active:1.9em}',
+            '.jellybutter-lyrics-medium{--jellybutter-line:1.6em;--jellybutter-active:2.5em}',
+            '.jellybutter-lyrics-large{--jellybutter-line:2em;--jellybutter-active:3.2em}',
+            '.jellybutter-lyrics-scroll{position:absolute;left:8vw;right:8vw;top:0;will-change:transform}',
+            '.jellybutter-lyrics-synced .jellybutter-lyrics-scroll{transition:transform .5s cubic-bezier(.2,.7,.2,1)}',
+            '.jellybutter-lyrics-block{position:absolute;left:8vw;right:8vw;top:50%;transform:translateY(-50%)}',
+            '.jellybutter-lyrics-block.jellybutter-lyrics-tall{top:0;transform:none;padding:12vh 0}',
             // Readable over any preset: a dark stroke under the fill, a dark drop shadow, and on the
             // current line the accent glow.
-            '.milkdrop-lyric{margin:0;padding:.18em 0;color:rgba(255,255,255,.92);font-size:var(--milkdrop-line);font-weight:500;line-height:1.3;' +
+            '.jellybutter-lyric{margin:0;padding:.18em 0;color:rgba(255,255,255,.92);font-size:var(--jellybutter-line);font-weight:500;line-height:1.3;' +
                 '-webkit-text-stroke:2px rgba(0,0,0,.75);paint-order:stroke fill;text-shadow:0 2px 4px rgba(0,0,0,.9);' +
                 'transition:color .4s,font-size .4s,text-shadow .4s,opacity .4s;min-height:1.3em}',
-            '.milkdrop-lyric-past{opacity:.6;color:rgba(255,255,255,.8)}',
-            '.milkdrop-lyric-future{opacity:.8}',
-            '.milkdrop-lyric-active{opacity:1;color:#fff;font-size:var(--milkdrop-active);font-weight:700;-webkit-text-stroke:2px rgba(0,0,0,.8);' +
+            '.jellybutter-lyric-past{opacity:.6;color:rgba(255,255,255,.8)}',
+            '.jellybutter-lyric-future{opacity:.8}',
+            '.jellybutter-lyric-active{opacity:1;color:#fff;font-size:var(--jellybutter-active);font-weight:700;-webkit-text-stroke:2px rgba(0,0,0,.8);' +
                 'text-shadow:0 0 20px rgba(0,164,220,.5),0 0 40px rgba(0,164,220,.25),0 2px 4px rgba(0,0,0,.9)}',
-            '.milkdrop-lyric-note{position:absolute;left:8vw;right:8vw;top:50%;transform:translateY(-50%);opacity:.8;font-style:italic}'
+            '.jellybutter-lyric-note{position:absolute;left:8vw;right:8vw;top:50%;transform:translateY(-50%);opacity:.8;font-style:italic}',
+            // jellyfin-web's footer (it holds the Now Playing bar) above the overlay, and pinned: its headroom
+            // otherwise slides it away on scroll. Its own rule is z-index:1201!important.
+            'html.jellybutter-bar .appfooter{z-index:100000!important;transform:none!important}'
         ].join('\n');
         document.head.appendChild(style);
     }
@@ -406,32 +437,32 @@
         css();
 
         ui.toggleWrap = document.createElement('div');
-        ui.toggleWrap.className = 'milkdrop-toggle-wrap';
-        ui.toggle = button('milkdrop-toggle', 'Visualizer (v)', ICONS.bars, toggle);
+        ui.toggleWrap.className = 'jellybutter-toggle-wrap';
+        ui.toggle = button('jellybutter-toggle', 'Visualizer (v)', ICONS.bars, toggle);
         ui.toggle.setAttribute('aria-pressed', 'false');
         ui.toggleWrap.appendChild(ui.toggle);
         document.body.appendChild(ui.toggleWrap);
 
         ui.overlay = document.createElement('div');
-        ui.overlay.className = 'milkdrop-overlay milkdrop-lyrics-' + config.lyricsSize;
+        ui.overlay.className = 'jellybutter-overlay jellybutter-lyrics-' + config.lyricsSize;
         ui.overlay.setAttribute('role', 'dialog');
         ui.overlay.setAttribute('aria-label', 'Music visualizer');
         ui.canvas = document.createElement('canvas');
-        ui.canvas.className = 'milkdrop-canvas';
+        ui.canvas.className = 'jellybutter-canvas';
         ui.lyrics = document.createElement('div');
-        ui.lyrics.className = 'milkdrop-lyrics';
+        ui.lyrics.className = 'jellybutter-lyrics';
         ui.lyrics.setAttribute('aria-live', 'off');
         ui.toast = document.createElement('div');
-        ui.toast.className = 'milkdrop-toast';
+        ui.toast.className = 'jellybutter-toast';
         ui.toast.setAttribute('aria-live', 'polite');
         ui.controls = document.createElement('div');
-        ui.controls.className = 'milkdrop-controls';
-        ui.prev = button('milkdrop-ctrl', 'Previous preset (n)', ICONS.prev, function () { loadPreset(MilkdropCore.stepIndex(state.index, state.names.length, -1)); });
-        ui.random = button('milkdrop-ctrl', 'Random preset', ICONS.random, function () { loadPreset(MilkdropCore.randomIndex(state.names.length, state.index)); });
-        ui.next = button('milkdrop-ctrl', 'Next preset (b)', ICONS.next, function () { loadPreset(MilkdropCore.stepIndex(state.index, state.names.length, 1)); });
-        ui.lyricsBtn = button('milkdrop-ctrl', 'Lyrics (l)', ICONS.lyrics, function () { setLyrics(!state.lyricsOn); });
+        ui.controls.className = 'jellybutter-controls';
+        ui.prev = button('jellybutter-ctrl', 'Previous preset (n)', ICONS.prev, function () { loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, -1)); });
+        ui.random = button('jellybutter-ctrl', 'Random preset', ICONS.random, function () { loadPreset(JellybutterCore.randomIndex(state.names.length, state.index)); });
+        ui.next = button('jellybutter-ctrl', 'Next preset (b)', ICONS.next, function () { loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, 1)); });
+        ui.lyricsBtn = button('jellybutter-ctrl', 'Lyrics (l)', ICONS.lyrics, function () { setLyrics(!state.lyricsOn); });
         ui.lyricsBtn.setAttribute('aria-pressed', 'false');
-        ui.close = button('milkdrop-ctrl', 'Close visualizer (Escape)', ICONS.close, close);
+        ui.close = button('jellybutter-ctrl', 'Close visualizer (Escape)', ICONS.close, close);
         ui.controls.appendChild(ui.prev);
         ui.controls.appendChild(ui.random);
         ui.controls.appendChild(ui.next);
@@ -451,9 +482,9 @@
 
     var controlsTimer = 0;
     function showControls() {
-        ui.overlay.classList.add('milkdrop-controls-shown');
+        ui.overlay.classList.add('jellybutter-controls-shown');
         clearTimeout(controlsTimer);
-        controlsTimer = setTimeout(function () { ui.overlay.classList.remove('milkdrop-controls-shown'); }, 2500);
+        controlsTimer = setTimeout(function () { ui.overlay.classList.remove('jellybutter-controls-shown'); }, 2500);
     }
 
     // ---- The Now Playing control-row button -------------------------------------------------------------
@@ -476,7 +507,7 @@
         try { b = document.createElement('button', { is: 'paper-icon-button-light' }); } catch (e) { b = document.createElement('button'); }
         b.setAttribute('is', 'paper-icon-button-light');
         b.type = 'button';
-        b.className = 'btnMilkdrop autoSize hide';
+        b.className = 'btnJellybutter autoSize hide';
         b.title = 'Visualizer';
         b.setAttribute('aria-label', 'Visualizer');
         b.setAttribute('aria-pressed', 'false');
@@ -491,10 +522,10 @@
     /** Puts the button into the row if the row is there and the button is not: jellyfin-web rebuilds the row. */
     function ensureControlButton(row) {
         if (!row || !config.controlButton) { return null; }
-        var existing = row.querySelector('.btnMilkdrop');
+        var existing = row.querySelector('.btnJellybutter');
         if (existing) { return existing; }
         var b = createControlButton();
-        var index = MilkdropCore.controlButtonIndex(Array.prototype.map.call(row.children, function (c) { return c.className; }));
+        var index = JellybutterCore.controlButtonIndex(Array.prototype.map.call(row.children, function (c) { return c.className; }));
         row.insertBefore(b, row.children[index] || null);
         return b;
     }
@@ -513,12 +544,12 @@
     function refreshButtons() {
         var row = findControlRow();
         var control = ensureControlButton(row);
-        var placement = MilkdropCore.buttonPlacement(config, state.trackLoaded, state.unsupported, isOnScreen(row));
+        var placement = JellybutterCore.buttonPlacement(config, state.trackLoaded, state.unsupported, isOnScreen(row));
         if (control) {
             control.classList.toggle('hide', !placement.control);
             control.setAttribute('aria-pressed', state.open ? 'true' : 'false');
         }
-        ui.toggleWrap.classList.toggle('milkdrop-visible', placement.floating);
+        ui.toggleWrap.classList.toggle('jellybutter-visible', placement.floating);
     }
 
     // ---- Audio element watching --------------------------------------------------------------------------
@@ -544,7 +575,7 @@
     }
 
     function onAudioEvent() {
-        var loaded = MilkdropCore.isTrackLoaded(state.audio);
+        var loaded = JellybutterCore.isTrackLoaded(state.audio);
         if (loaded) {
             clearTimeout(state.stopTimer);
             state.stopTimer = 0;
@@ -558,7 +589,7 @@
         if (!state.stopTimer) {
             state.stopTimer = setTimeout(function () {
                 state.stopTimer = 0;
-                if (MilkdropCore.isTrackLoaded(state.audio)) { return; }
+                if (JellybutterCore.isTrackLoaded(state.audio)) { return; }
                 state.trackLoaded = false;
                 refreshButtons();
                 if (state.open) { close(); }
@@ -578,6 +609,7 @@
         ['viewshow', 'viewhide', 'viewbeforehide'].forEach(function (ev) {
             document.addEventListener(ev, scheduleRefresh, true);
         });
+        document.addEventListener('viewbeforeshow', onViewBeforeShow, true);
     }
 
     // ---- Web Audio ----------------------------------------------------------------------------------------
@@ -644,7 +676,7 @@
             s.src = url;
             s.async = true;
             s.onload = function () { resolve(); };
-            s.onerror = function () { reject(new Error('Milkdrop: failed to load ' + url)); };
+            s.onerror = function () { reject(new Error('Jellybutter: failed to load ' + url)); };
             document.head.appendChild(s);
         });
     }
@@ -652,14 +684,14 @@
     function ensureLibs() {
         if (!state.libs) {
             state.libs = Promise.all([
-                window.butterchurn ? Promise.resolve() : loadScript(MilkdropCore.assetUrl(assetBase, 'butterchurn.js', version)),
-                window.butterchurnPresets ? Promise.resolve() : loadScript(MilkdropCore.assetUrl(assetBase, 'butterchurn-presets.js', version))
+                window.butterchurn ? Promise.resolve() : loadScript(JellybutterCore.assetUrl(assetBase, 'butterchurn.js', version)),
+                window.butterchurnPresets ? Promise.resolve() : loadScript(JellybutterCore.assetUrl(assetBase, 'butterchurn-presets.js', version))
             ]).then(function () {
                 // The UMD bundles expose the ES module namespace: the API is its default export.
                 var engine = window.butterchurn && (window.butterchurn.default || window.butterchurn);
                 var presets = window.butterchurnPresets && (window.butterchurnPresets.default || window.butterchurnPresets);
                 if (!engine || typeof engine.createVisualizer !== 'function' || !presets || typeof presets.getPresets !== 'function') {
-                    throw new Error('Milkdrop: the Butterchurn bundles did not define createVisualizer and getPresets');
+                    throw new Error('Jellybutter: the Butterchurn bundles did not define createVisualizer and getPresets');
                 }
                 state.engine = engine;
                 state.presets = presets.getPresets();
@@ -715,12 +747,13 @@
         if (!state.open || !state.visualizer) { return; }
         var size = sizeCanvas();
         state.visualizer.setRendererSize(size.w, size.h);
+        updateBarInset();
         updateLyrics(true);
     }
 
     function loadPreset(index, blend) {
         if (!state.visualizer || !state.names.length) { return; }
-        state.index = MilkdropCore.stepIndex(index, state.names.length, 0);
+        state.index = JellybutterCore.stepIndex(index, state.names.length, 0);
         var name = state.names[state.index];
         state.visualizer.loadPreset(state.presets[name], typeof blend === 'number' ? blend : config.blendSeconds);
         ui.toast.textContent = '';
@@ -728,9 +761,9 @@
         var counter = document.createElement('small');
         counter.textContent = (state.index + 1) + ' / ' + state.names.length;
         ui.toast.appendChild(counter);
-        ui.toast.classList.add('milkdrop-shown');
+        ui.toast.classList.add('jellybutter-shown');
         clearTimeout(state.flashTimer);
-        state.flashTimer = setTimeout(function () { ui.toast.classList.remove('milkdrop-shown'); }, NAME_FLASH_MS);
+        state.flashTimer = setTimeout(function () { ui.toast.classList.remove('jellybutter-shown'); }, NAME_FLASH_MS);
         restartCycle();
     }
 
@@ -739,14 +772,14 @@
         state.cycleTimer = 0;
         if (config.cycleSeconds > 0 && state.open) {
             state.cycleTimer = setInterval(function () {
-                loadPreset(MilkdropCore.stepIndex(state.index, state.names.length, 1));
+                loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, 1));
             }, config.cycleSeconds * 1000);
         }
     }
 
     function render() {
         if (!state.open || !state.visualizer) { state.raf = 0; return; }
-        try { state.visualizer.render(); } catch (e) { console.error('[Milkdrop] render failed', e); close(); return; }
+        try { state.visualizer.render(); } catch (e) { console.error('[Jellybutter] render failed', e); close(); return; }
         if (state.lyricsOn) { updateLyrics(false); }
         state.raf = requestAnimationFrame(render);
     }
@@ -755,7 +788,7 @@
 
     function setLyrics(on) {
         state.lyricsOn = !!on;
-        ui.overlay.classList.toggle('milkdrop-lyrics-on', state.lyricsOn);
+        ui.overlay.classList.toggle('jellybutter-lyrics-on', state.lyricsOn);
         ui.lyricsBtn.setAttribute('aria-pressed', state.lyricsOn ? 'true' : 'false');
         if (state.lyricsOn) {
             loadLyrics();
@@ -767,14 +800,14 @@
         ui.lyrics.textContent = '';
         state.lyrics.elements = [];
         var note = document.createElement('p');
-        note.className = 'milkdrop-lyric milkdrop-lyric-note';
+        note.className = 'jellybutter-lyric jellybutter-lyric-note';
         note.textContent = text;
         ui.lyrics.appendChild(note);
     }
 
     /** Fetches the current track's lyrics from Jellyfin's Lyrics API, once per track. */
     function loadLyrics() {
-        var id = MilkdropCore.itemIdFromSrc(state.audio && state.audio.currentSrc);
+        var id = JellybutterCore.itemIdFromSrc(state.audio && state.audio.currentSrc);
         if (!id || state.lyrics.itemId === id) { return; }
         state.lyrics.itemId = id;
         state.lyrics.data = null;
@@ -789,7 +822,7 @@
         try { request = api.getJSON(api.getUrl('Audio/' + id + '/Lyrics')); } catch (e) { request = Promise.reject(e); }
         Promise.resolve(request).then(function (dto) {
             if (state.lyrics.itemId !== id) { return; }
-            state.lyrics.data = MilkdropCore.normalizeLyrics(dto);
+            state.lyrics.data = JellybutterCore.normalizeLyrics(dto);
             renderLyrics();
         }, function () {
             // 404: the track has no lyrics (or no lyrics plugin found any).
@@ -808,12 +841,12 @@
             return;
         }
         ui.lyrics.textContent = '';
-        ui.lyrics.classList.toggle('milkdrop-lyrics-synced', data.synced);
+        ui.lyrics.classList.toggle('jellybutter-lyrics-synced', data.synced);
         var holder = document.createElement('div');
-        holder.className = data.synced ? 'milkdrop-lyrics-scroll' : 'milkdrop-lyrics-block';
+        holder.className = data.synced ? 'jellybutter-lyrics-scroll' : 'jellybutter-lyrics-block';
         state.lyrics.elements = data.lines.map(function (line) {
             var p = document.createElement('p');
-            p.className = 'milkdrop-lyric' + (data.synced ? ' milkdrop-lyric-future' : '');
+            p.className = 'jellybutter-lyric' + (data.synced ? ' jellybutter-lyric-future' : '');
             p.textContent = line.text || ' ';
             holder.appendChild(p);
             return p;
@@ -831,11 +864,11 @@
         var time = state.audio.currentTime || 0;
         var viewHeight = ui.lyrics.clientHeight || window.innerHeight;
         if (data.synced) {
-            var index = MilkdropCore.lyricIndexAt(data.lines, time);
+            var index = JellybutterCore.lyricIndexAt(data.lines, time);
             if (!force && index === state.lyrics.index) { return; }
             state.lyrics.index = index;
             state.lyrics.elements.forEach(function (el, i) {
-                el.className = 'milkdrop-lyric ' + (i < index ? 'milkdrop-lyric-past' : i === index ? 'milkdrop-lyric-active' : 'milkdrop-lyric-future');
+                el.className = 'jellybutter-lyric ' + (i < index ? 'jellybutter-lyric-past' : i === index ? 'jellybutter-lyric-active' : 'jellybutter-lyric-future');
             });
             var anchor = state.lyrics.elements[Math.max(0, index)];
             if (anchor) {
@@ -847,14 +880,66 @@
         }
         var blockHeight = holder.scrollHeight;
         var tall = blockHeight > viewHeight;
-        holder.classList.toggle('milkdrop-lyrics-tall', tall);
+        holder.classList.toggle('jellybutter-lyrics-tall', tall);
         var duration = state.audio.duration;
         var progress = duration > 0 ? time / duration : 0;
-        var offset = MilkdropCore.blockOffset(blockHeight, viewHeight, progress);
+        var offset = JellybutterCore.blockOffset(blockHeight, viewHeight, progress);
         if (force || offset !== state.lyrics.offset) {
             state.lyrics.offset = offset;
             holder.style.transform = tall ? 'translateY(' + offset + 'px)' : '';
         }
+    }
+
+    // ---- Now Playing bar -----------------------------------------------------------------------------------
+
+    // jellyfin-web's bar listens for viewbeforeshow on the document and shows itself (and keeps updating)
+    // only while the last one said options.enableMediaControl. Real ones come from the view element and
+    // bubble up; ours is dispatched on the document itself, which no view's own listener sees, and is
+    // marked so this script's listener skips it.
+    function tellBar(allowed) {
+        var detail = { isRestored: true, options: { enableMediaControl: allowed }, jellybutter: true };
+        document.dispatchEvent(new CustomEvent('viewbeforeshow', { bubbles: false, cancelable: false, detail: detail }));
+    }
+
+    function onViewBeforeShow(e) {
+        var detail = e.detail;
+        if (!detail || detail.jellybutter) { return; }
+        state.pageMediaControl = !!(detail.options && detail.options.enableMediaControl);
+        // A page change under the open visualizer (the bar's own link to Now Playing) hides the bar again;
+        // put it back once jellyfin-web's handler, later on the bubbling path, has run.
+        if (state.open && config.nowPlayingBar) {
+            setTimeout(function () {
+                if (state.open) { tellBar(JellybutterCore.mediaControlFor(true, true, state.pageMediaControl)); }
+            }, 0);
+        }
+    }
+
+    function updateBarInset() {
+        var bar = config.nowPlayingBar && state.open ? document.querySelector('.appfooter .nowPlayingBar') : null;
+        var footer = bar && bar.closest('.appfooter');
+        var inset = JellybutterCore.barInset(bar ? bar.className : null, footer ? footer.offsetHeight : 0);
+        ui.overlay.style.setProperty('--jellybutter-bar', inset + 'px');
+    }
+
+    function showBar() {
+        if (!config.nowPlayingBar) { return; }
+        document.documentElement.classList.add('jellybutter-bar');
+        tellBar(JellybutterCore.mediaControlFor(true, true, state.pageMediaControl));
+        // jellyfin-web builds the bar on first show and toggles its classes as playback changes.
+        var footer = document.querySelector('.appfooter');
+        if (footer && !state.barObserver) {
+            state.barObserver = new MutationObserver(updateBarInset);
+            state.barObserver.observe(footer, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
+        }
+        updateBarInset();
+    }
+
+    function hideBar() {
+        if (!config.nowPlayingBar) { return; }
+        if (state.barObserver) { state.barObserver.disconnect(); state.barObserver = null; }
+        document.documentElement.classList.remove('jellybutter-bar');
+        tellBar(JellybutterCore.mediaControlFor(false, true, state.pageMediaControl));
+        updateBarInset();
     }
 
     // ---- Open / close --------------------------------------------------------------------------------------
@@ -869,7 +954,7 @@
             connect();
         } catch (err) {
             opening = false;
-            console.error('[Milkdrop] could not attach to the audio element', err);
+            console.error('[Jellybutter] could not attach to the audio element', err);
             return;
         }
         ensureLibs().then(function () {
@@ -877,7 +962,7 @@
             if (!state.audio || !state.tap) { return; }
             state.open = true;
             state.lastFocus = document.activeElement;
-            ui.overlay.classList.add('milkdrop-open');
+            ui.overlay.classList.add('jellybutter-open');
             ui.toggle.setAttribute('aria-pressed', 'true');
             try {
                 if (!state.visualizer) { createVisualizer(); } else { resize(); }
@@ -887,7 +972,8 @@
                 unsupported(err);
                 return;
             }
-            loadPreset(MilkdropCore.randomIndex(state.names.length, -1), 0);
+            loadPreset(JellybutterCore.randomIndex(state.names.length, -1), 0);
+            showBar();
             setLyrics(config.defaultView === 'lyrics');
             render();
             showControls();
@@ -895,17 +981,17 @@
             moveFocus(ui.next);
         }, function (err) {
             opening = false;
-            console.error('[Milkdrop]', err);
+            console.error('[Jellybutter]', err);
         });
     }
 
     function unsupported(err) {
-        console.error('[Milkdrop] this browser cannot run the visualizer (WebGL 2 is required)', err);
+        console.error('[Jellybutter] this browser cannot run the visualizer (WebGL 2 is required)', err);
         state.unsupported = true;
         ui.toast.textContent = 'The visualizer needs WebGL 2, which this browser does not provide.';
-        ui.toast.classList.add('milkdrop-shown');
+        ui.toast.classList.add('jellybutter-shown');
         setTimeout(function () {
-            ui.toast.classList.remove('milkdrop-shown');
+            ui.toast.classList.remove('jellybutter-shown');
             close();
             refreshButtons();
         }, NAME_FLASH_MS);
@@ -918,16 +1004,17 @@
         state.raf = 0;
         clearInterval(state.cycleTimer);
         state.cycleTimer = 0;
-        ui.overlay.classList.remove('milkdrop-open');
+        ui.overlay.classList.remove('jellybutter-open');
         ui.toggle.setAttribute('aria-pressed', 'false');
+        hideBar();
         refreshButtons();
         var back = state.lastFocus;
         state.lastFocus = null;
         var row = findControlRow();
-        var control = row && row.querySelector('.btnMilkdrop');
+        var control = row && row.querySelector('.btnJellybutter');
         if (control && isOnScreen(control)) {
             moveFocus(control);
-        } else if (ui.toggleWrap.classList.contains('milkdrop-visible')) {
+        } else if (ui.toggleWrap.classList.contains('jellybutter-visible')) {
             moveFocus(ui.toggle);
         } else if (back && typeof back.focus === 'function' && document.contains(back)) {
             moveFocus(back);
@@ -954,23 +1041,23 @@
     function onKeyDown(e) {
         if (e.defaultPrevented) { return; }
         var t = e.target;
-        if (t && MilkdropCore.isTypingTarget(t.tagName, t.isContentEditable)) { return; }
-        var action = MilkdropCore.hotkeyFor(e.key, state.open, state.trackLoaded, e);
+        if (t && JellybutterCore.isTypingTarget(t.tagName, t.isContentEditable)) { return; }
+        var action = JellybutterCore.hotkeyFor(e.key, state.open, state.trackLoaded, e);
         if (!action) { return; }
         e.preventDefault();
         e.stopImmediatePropagation();
         if (action === 'toggle') { toggle(); }
         else if (action === 'close') { close(); }
         else if (action === 'lyrics') { setLyrics(!state.lyricsOn); }
-        else if (action === 'next') { loadPreset(MilkdropCore.stepIndex(state.index, state.names.length, 1)); }
-        else if (action === 'prev') { loadPreset(MilkdropCore.stepIndex(state.index, state.names.length, -1)); }
+        else if (action === 'next') { loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, 1)); }
+        else if (action === 'prev') { loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, -1)); }
     }
 
     function start() {
         buildUi();
         startObserver();
         // A read-only handle for diagnosing a client in the field (devtools, or a remote-debugging port).
-        window.jfMilkdrop = { version: version, config: config, core: MilkdropCore, state: state };
+        window.jellybutter = { version: version, config: config, core: JellybutterCore, state: state };
     }
 
     if (document.readyState === 'loading') {

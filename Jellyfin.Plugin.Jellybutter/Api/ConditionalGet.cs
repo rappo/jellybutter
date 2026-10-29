@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Net.Http.Headers;
 
-namespace Jellyfin.Plugin.Milkdrop.Api;
+namespace Jellyfin.Plugin.Jellybutter.Api;
 
 /// <summary>
 /// Decides whether a browser's cached copy of a response is still current, so index.html can be answered

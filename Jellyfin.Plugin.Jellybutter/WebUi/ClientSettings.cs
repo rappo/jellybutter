@@ -1,9 +1,9 @@
 using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Jellyfin.Plugin.Milkdrop.Configuration;
+using Jellyfin.Plugin.Jellybutter.Configuration;
 
-namespace Jellyfin.Plugin.Milkdrop.WebUi;
+namespace Jellyfin.Plugin.Jellybutter.WebUi;
 
 /// <summary>
 /// The settings the client script runs with, as the injected script tag carries them in its data attribute.
@@ -15,6 +15,7 @@ namespace Jellyfin.Plugin.Milkdrop.WebUi;
 /// <param name="BlendSeconds">Seconds a preset change blends over.</param>
 /// <param name="ControlButton">Whether the Now Playing control row gets a visualizer button.</param>
 /// <param name="FloatingButton">Whether a floating visualizer button is shown on other pages.</param>
+/// <param name="NowPlayingBar">Whether jellyfin-web's Now Playing bar shows along the bottom of the visualizer.</param>
 /// <param name="DefaultView">The view the visualizer opens in, one of <see cref="Views"/>.</param>
 /// <param name="LyricsSize">The lyrics text size, one of <see cref="LyricsSizes"/>.</param>
 public sealed record ClientSettings(
@@ -23,6 +24,7 @@ public sealed record ClientSettings(
     double BlendSeconds,
     bool ControlButton,
     bool FloatingButton,
+    bool NowPlayingBar,
     string DefaultView,
     string LyricsSize)
 {
@@ -72,6 +74,7 @@ public sealed record ClientSettings(
             blend,
             configuration.ControlButton,
             configuration.FloatingButton,
+            configuration.NowPlayingBar,
             PickOne(configuration.DefaultView, Views, Views[0]),
             PickOne(configuration.LyricsSize, LyricsSizes, LyricsSizes[1]));
     }

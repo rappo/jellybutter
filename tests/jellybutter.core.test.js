@@ -2,16 +2,16 @@
 // browser and skips its DOM part.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const core = require('../Jellyfin.Plugin.Milkdrop/Web/milkdrop.js');
+const core = require('../Jellyfin.Plugin.Jellybutter/Web/jellybutter.js');
 
-const DEFAULTS = { desktopWebAudio: true, cycleSeconds: 30, blendSeconds: 2.7, controlButton: true, floatingButton: true, defaultView: 'visualizer', lyricsSize: 'medium' };
+const DEFAULTS = { desktopWebAudio: true, cycleSeconds: 30, blendSeconds: 2.7, controlButton: true, floatingButton: true, nowPlayingBar: true, defaultView: 'visualizer', lyricsSize: 'medium' };
 
 test('parseConfig: fills defaults for a missing, malformed or partial attribute', () => {
     assert.deepEqual(core.parseConfig(null), DEFAULTS);
     assert.deepEqual(core.parseConfig('not json'), DEFAULTS);
     assert.deepEqual(core.parseConfig('{"cycleSeconds":0}'), { ...DEFAULTS, cycleSeconds: 0 });
-    assert.deepEqual(core.parseConfig('{"desktopWebAudio":false,"cycleSeconds":45,"blendSeconds":1.5,"controlButton":false,"floatingButton":false,"defaultView":"lyrics","lyricsSize":"large"}'),
-        { desktopWebAudio: false, cycleSeconds: 45, blendSeconds: 1.5, controlButton: false, floatingButton: false, defaultView: 'lyrics', lyricsSize: 'large' });
+    assert.deepEqual(core.parseConfig('{"desktopWebAudio":false,"cycleSeconds":45,"blendSeconds":1.5,"controlButton":false,"floatingButton":false,"nowPlayingBar":false,"defaultView":"lyrics","lyricsSize":"large"}'),
+        { desktopWebAudio: false, cycleSeconds: 45, blendSeconds: 1.5, controlButton: false, floatingButton: false, nowPlayingBar: false, defaultView: 'lyrics', lyricsSize: 'large' });
     assert.equal(core.parseConfig('{"cycleSeconds":-5,"blendSeconds":"x"}').cycleSeconds, 30);
     assert.equal(core.parseConfig('{"cycleSeconds":-5,"blendSeconds":"x"}').blendSeconds, 2.7);
     // Unknown choices fall back; casing is forgiven.
@@ -19,6 +19,8 @@ test('parseConfig: fills defaults for a missing, malformed or partial attribute'
     assert.equal(core.parseConfig('{"defaultView":"Lyrics"}').defaultView, 'lyrics');
     assert.equal(core.parseConfig('{"lyricsSize":"huge"}').lyricsSize, 'medium');
     assert.equal(core.parseConfig('{"controlButton":"no"}').controlButton, true);
+    // A tag from 1.1.0.0, before the setting existed, gets the bar.
+    assert.equal(core.parseConfig('{"controlButton":true}').nowPlayingBar, true);
 });
 
 test('filterNativePlugins: drops only the mpv audio player, only when the setting is on', () => {
@@ -94,12 +96,12 @@ test('isTrackLoaded: playing or paused on a loaded source, never stopped or ende
 });
 
 test('assetBase and assetUrl: bundles resolve beside the script with the same version query', () => {
-    assert.equal(core.assetBase('http://h/Milkdrop/client.js?v=1.2.3.4'), 'http://h/Milkdrop/');
-    assert.equal(core.assetBase('http://h/jellyfin/Milkdrop/client.js'), 'http://h/jellyfin/Milkdrop/');
+    assert.equal(core.assetBase('http://h/Jellybutter/client.js?v=1.2.3.4'), 'http://h/Jellybutter/');
+    assert.equal(core.assetBase('http://h/jellyfin/Jellybutter/client.js'), 'http://h/jellyfin/Jellybutter/');
     assert.equal(core.assetBase(undefined), null);
     assert.equal(core.assetBase('client.js'), null);
-    assert.equal(core.assetUrl('http://h/Milkdrop/', 'butterchurn.js', '1.0.0.0'), 'http://h/Milkdrop/butterchurn.js?v=1.0.0.0');
-    assert.equal(core.assetUrl('/Milkdrop/', 'butterchurn-presets.js', 'a b'), '/Milkdrop/butterchurn-presets.js?v=a%20b');
+    assert.equal(core.assetUrl('http://h/Jellybutter/', 'butterchurn.js', '1.0.0.0'), 'http://h/Jellybutter/butterchurn.js?v=1.0.0.0');
+    assert.equal(core.assetUrl('/Jellybutter/', 'butterchurn-presets.js', 'a b'), '/Jellybutter/butterchurn-presets.js?v=a%20b');
 });
 
 test('mergeAudioProfile: audio entries come from the browser, everything else stays the shell\'s', () => {
@@ -215,4 +217,24 @@ test('blockOffset: an unsynced block stays put while it fits and scrolls with pr
     assert.equal(core.blockOffset(1800, 800, 7), -1000);
     assert.equal(core.blockOffset(1800, 800, -1), 0);
     assert.equal(core.blockOffset(1800, 800, NaN), 0);
+});
+
+test('mediaControlFor: the open visualizer allows the bar; closed, or with the setting off, the page decides', () => {
+    assert.equal(core.mediaControlFor(true, true, false), true);     // opened from Now Playing, which hides it
+    assert.equal(core.mediaControlFor(true, true, true), true);
+    assert.equal(core.mediaControlFor(false, true, false), false);   // closing on Now Playing hands it back
+    assert.equal(core.mediaControlFor(false, true, true), true);
+    assert.equal(core.mediaControlFor(true, false, false), false);   // setting off: never overridden
+    // No page seen yet: jellyfin-web starts out allowing it.
+    assert.equal(core.mediaControlFor(false, true, null), true);
+});
+
+test('barInset: the footer height while the bar shows, nothing while it is missing, hidden or slid away', () => {
+    assert.equal(core.barInset('nowPlayingBar', 74.6), 75);
+    assert.equal(core.barInset('nowPlayingBar hide nowPlayingBar-hidden', 74), 0);   // as jellyfin-web first builds it
+    assert.equal(core.barInset('nowPlayingBar nowPlayingBar-hidden', 74), 0);
+    assert.equal(core.barInset('nowPlayingBar hide', 74), 0);
+    assert.equal(core.barInset(null, 74), 0);                                         // TV layout: no bar at all
+    assert.equal(core.barInset('nowPlayingBar', 0), 0);
+    assert.equal(core.barInset('nowPlayingBar-hiddenish nowPlayingBar', 60), 60);    // whole class names only
 });

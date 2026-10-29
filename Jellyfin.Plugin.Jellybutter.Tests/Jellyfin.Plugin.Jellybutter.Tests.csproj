@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Jellyfin.Plugin.Milkdrop\Jellyfin.Plugin.Milkdrop.csproj" />
+    <ProjectReference Include="..\Jellyfin.Plugin.Jellybutter\Jellyfin.Plugin.Jellybutter.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Jellyfin.Controller" />
     <PackageReference Include="Jellyfin.Model" />

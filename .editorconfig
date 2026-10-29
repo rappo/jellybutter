@@ -1,4 +1,4 @@
-# EditorConfig for Jellyfin.Plugin.Milkdrop (analyzer settings shared with the Jellyfin plugin template).
+# EditorConfig for Jellyfin.Plugin.Jellybutter (analyzer settings shared with the Jellyfin plugin template).
 # Adapted from jellyfin/jellyfin's .editorconfig:
 # code-style + naming + formatting + analyzer severities.
 root = true

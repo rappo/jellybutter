@@ -1,20 +1,20 @@
 using System;
 using System.Text;
-using Jellyfin.Plugin.Milkdrop.Api;
+using Jellyfin.Plugin.Jellybutter.Api;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 using Xunit;
 
-namespace Jellyfin.Plugin.Milkdrop.Tests;
+namespace Jellyfin.Plugin.Jellybutter.Tests;
 
 // The three asset endpoints serve files compiled into the plugin. The Butterchurn ones prove the npm bundles
 // were embedded by the build: a missing node_modules would otherwise only show up in a browser.
-public class MilkdropControllerTests
+public class JellybutterControllerTests
 {
-    private static MilkdropController Controller(bool enabled = true, string? version = null)
+    private static JellybutterController Controller(bool enabled = true, string? version = null)
     {
-        var controller = new MilkdropController(() => enabled)
+        var controller = new JellybutterController(() => enabled)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
@@ -41,7 +41,7 @@ public class MilkdropControllerTests
         var file = File(Controller().GetClientScript(null));
 
         var text = Encoding.UTF8.GetString(file.FileContents);
-        Assert.Contains("MilkdropCore", text, StringComparison.Ordinal);
+        Assert.Contains("JellybutterCore", text, StringComparison.Ordinal);
         Assert.Contains("filterNativePlugins", text, StringComparison.Ordinal);
         Assert.Equal(64 + 2, file.EntityTag!.Tag.Length);
     }
@@ -71,10 +71,10 @@ public class MilkdropControllerTests
     [Fact]
     public void ARequestNamingTheCurrentVersion_IsImmutableForAYear_AnyOtherRevalidates()
     {
-        Assert.Equal("public, max-age=31536000, immutable", MilkdropController.CacheControlFor("1.2.3.4", "1.2.3.4"));
-        Assert.Equal("public, no-cache", MilkdropController.CacheControlFor("1.2.3.3", "1.2.3.4"));
-        Assert.Equal("public, no-cache", MilkdropController.CacheControlFor(null, "1.2.3.4"));
-        Assert.Equal("public, no-cache", MilkdropController.CacheControlFor(string.Empty, "1.2.3.4"));
+        Assert.Equal("public, max-age=31536000, immutable", JellybutterController.CacheControlFor("1.2.3.4", "1.2.3.4"));
+        Assert.Equal("public, no-cache", JellybutterController.CacheControlFor("1.2.3.3", "1.2.3.4"));
+        Assert.Equal("public, no-cache", JellybutterController.CacheControlFor(null, "1.2.3.4"));
+        Assert.Equal("public, no-cache", JellybutterController.CacheControlFor(string.Empty, "1.2.3.4"));
     }
 
     [Fact]

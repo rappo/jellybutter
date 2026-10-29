@@ -1,10 +1,10 @@
-using Jellyfin.Plugin.Milkdrop.WebUi;
+using Jellyfin.Plugin.Jellybutter.WebUi;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Jellyfin.Plugin.Milkdrop;
+namespace Jellyfin.Plugin.Jellybutter;
 
 /// <summary>
 /// Registers the plugin's services into the host DI container. The one service is the startup filter that

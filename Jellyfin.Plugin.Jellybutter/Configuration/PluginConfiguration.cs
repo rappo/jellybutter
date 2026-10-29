@@ -1,6 +1,6 @@
 using MediaBrowser.Model.Plugins;
 
-namespace Jellyfin.Plugin.Milkdrop.Configuration;
+namespace Jellyfin.Plugin.Jellybutter.Configuration;
 
 /// <summary>
 /// The plugin settings, as the settings page saves them. Every value the client script needs is handed to it
@@ -19,6 +19,7 @@ public class PluginConfiguration : BasePluginConfiguration
         BlendSeconds = 2.7;
         ControlButton = true;
         FloatingButton = true;
+        NowPlayingBar = true;
         DefaultView = "visualizer";
         LyricsSize = "medium";
     }
@@ -56,6 +57,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// on pages without the Now Playing control row.
     /// </summary>
     public bool FloatingButton { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether jellyfin-web's Now Playing bar (artwork, track, artist and the
+    /// playback controls) is shown along the bottom of the visualizer while it is open.
+    /// </summary>
+    public bool NowPlayingBar { get; set; }
 
     /// <summary>
     /// Gets or sets which view the visualizer opens in: "visualizer" or "lyrics" (the visualizer with the

@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 
-namespace Jellyfin.Plugin.Milkdrop.Api;
+namespace Jellyfin.Plugin.Jellybutter.Api;
 
 /// <summary>
 /// Serves the plugin's client-side files: the client script the injected tag loads, and the two Butterchurn
@@ -14,37 +14,37 @@ namespace Jellyfin.Plugin.Milkdrop.Api;
 /// browser never asks again until an update changes the tag, and any other request revalidates each time.
 /// </summary>
 [ApiController]
-[Route("Milkdrop")]
-public class MilkdropController : ControllerBase
+[Route("Jellybutter")]
+public class JellybutterController : ControllerBase
 {
     /// <summary>
     /// The route of the client script, relative to the server root, as the injected script tag references it.
     /// </summary>
-    public const string ClientScriptPath = "Milkdrop/client.js";
+    public const string ClientScriptPath = "Jellybutter/client.js";
 
-    private const string ResourcePrefix = "Jellyfin.Plugin.Milkdrop.Web.";
+    private const string ResourcePrefix = "Jellyfin.Plugin.Jellybutter.Web.";
     private const string JavaScript = "application/javascript";
 
-    private static readonly Lazy<EmbeddedAsset?> _clientScript = new(() => Load("milkdrop.js"));
+    private static readonly Lazy<EmbeddedAsset?> _clientScript = new(() => Load("jellybutter.js"));
     private static readonly Lazy<EmbeddedAsset?> _butterchurn = new(() => Load("butterchurn.min.js"));
     private static readonly Lazy<EmbeddedAsset?> _presets = new(() => Load("butterchurnPresets.min.js"));
 
     private readonly Func<bool> _enabled;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="MilkdropController"/> class.
+    /// Initializes a new instance of the <see cref="JellybutterController"/> class.
     /// </summary>
-    public MilkdropController()
+    public JellybutterController()
         : this(() => Plugin.Instance?.Configuration?.Enabled ?? false)
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="MilkdropController"/> class with an explicit switch.
+    /// Initializes a new instance of the <see cref="JellybutterController"/> class with an explicit switch.
     /// Test seam: the switch otherwise comes from the plugin configuration, which a test has no instance of.
     /// </summary>
     /// <param name="enabled">Reports whether the plugin is switched on, read per request.</param>
-    internal MilkdropController(Func<bool> enabled)
+    internal JellybutterController(Func<bool> enabled)
     {
         _enabled = enabled;
     }
@@ -99,7 +99,7 @@ public class MilkdropController : ControllerBase
             : "public, no-cache";
 
     private static EmbeddedAsset? Load(string name)
-        => EmbeddedAsset.Load(typeof(MilkdropController).Assembly, ResourcePrefix + name, JavaScript);
+        => EmbeddedAsset.Load(typeof(JellybutterController).Assembly, ResourcePrefix + name, JavaScript);
 
     private IActionResult Serve(EmbeddedAsset? asset, string? requestedVersion)
     {

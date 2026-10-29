@@ -1,8 +1,8 @@
-using Jellyfin.Plugin.Milkdrop.Configuration;
-using Jellyfin.Plugin.Milkdrop.WebUi;
+using Jellyfin.Plugin.Jellybutter.Configuration;
+using Jellyfin.Plugin.Jellybutter.WebUi;
 using Xunit;
 
-namespace Jellyfin.Plugin.Milkdrop.Tests;
+namespace Jellyfin.Plugin.Jellybutter.Tests;
 
 public class ClientSettingsTests
 {
@@ -17,11 +17,12 @@ public class ClientSettingsTests
         Assert.Equal(2.7, config.BlendSeconds);
         Assert.True(config.ControlButton);
         Assert.True(config.FloatingButton);
+        Assert.True(config.NowPlayingBar);
         Assert.Equal("visualizer", config.DefaultView);
         Assert.Equal("medium", config.LyricsSize);
 
         var settings = ClientSettings.FromConfiguration(config);
-        Assert.Equal(new ClientSettings(true, 30, 2.7, true, true, "visualizer", "medium"), settings);
+        Assert.Equal(new ClientSettings(true, 30, 2.7, true, true, true, "visualizer", "medium"), settings);
     }
 
     [Theory]
@@ -45,10 +46,11 @@ public class ClientSettingsTests
     [Fact]
     public void ButtonSwitches_PassThrough()
     {
-        var settings = ClientSettings.FromConfiguration(new PluginConfiguration { ControlButton = false, FloatingButton = false })!;
+        var settings = ClientSettings.FromConfiguration(new PluginConfiguration { ControlButton = false, FloatingButton = false, NowPlayingBar = false })!;
 
         Assert.False(settings.ControlButton);
         Assert.False(settings.FloatingButton);
+        Assert.False(settings.NowPlayingBar);
     }
 
     [Fact]
@@ -78,8 +80,8 @@ public class ClientSettingsTests
     [Fact]
     public void ToJson_IsCompactCamelCase_AsTheScriptParsesIt()
     {
-        var json = new ClientSettings(false, 0, 2.7, true, false, "lyrics", "large").ToJson();
+        var json = new ClientSettings(false, 0, 2.7, true, false, true, "lyrics", "large").ToJson();
 
-        Assert.Equal("{\"desktopWebAudio\":false,\"cycleSeconds\":0,\"blendSeconds\":2.7,\"controlButton\":true,\"floatingButton\":false,\"defaultView\":\"lyrics\",\"lyricsSize\":\"large\"}", json);
+        Assert.Equal("{\"desktopWebAudio\":false,\"cycleSeconds\":0,\"blendSeconds\":2.7,\"controlButton\":true,\"floatingButton\":false,\"nowPlayingBar\":true,\"defaultView\":\"lyrics\",\"lyricsSize\":\"large\"}", json);
     }
 }

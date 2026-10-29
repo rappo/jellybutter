@@ -1,5 +1,5 @@
 {
-  "name": "jellyfin-plugin-milkdrop",
+  "name": "jellybutter",
   "version": "0.0.0",
   "private": true,
   "description": "Pins the Butterchurn bundles the plugin embeds; the plugin itself is built by dotnet.",

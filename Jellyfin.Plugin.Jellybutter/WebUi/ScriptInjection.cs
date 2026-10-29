@@ -4,14 +4,14 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Jellyfin.Plugin.Milkdrop.Api;
+using Jellyfin.Plugin.Jellybutter.Api;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Net.Http.Headers;
 
-namespace Jellyfin.Plugin.Milkdrop.WebUi;
+namespace Jellyfin.Plugin.Jellybutter.WebUi;
 
 /// <summary>
 /// Adds the client script to jellyfin-web's index.html as it is served. Jellyfin has no hook for a plugin to
@@ -156,20 +156,20 @@ public sealed class ScriptInjection : IStartupFilter
             var injected = IndexHtmlInjector.Inject(html, Plugin.VersionString, settings);
             if (!ReferenceEquals(injected, html) && Interlocked.Exchange(ref _announced, 1) == 0)
             {
-                _logger.LogInformation("Milkdrop: client script added to index.html at request time.");
+                _logger.LogInformation("Jellybutter: client script added to index.html at request time.");
             }
             else if (ReferenceEquals(injected, html) && !IndexHtmlInjector.HasScript(html) && Interlocked.Exchange(ref _warnedNoBody, 1) == 0)
             {
                 // Nothing to insert before: a theme or proxy has reshaped the page. Without this the button
                 // would just never appear, with no trace of why.
-                _logger.LogWarning("Milkdrop: index.html has no closing body tag, so the client script was not added and the visualizer will not appear.");
+                _logger.LogWarning("Jellybutter: index.html has no closing body tag, so the client script was not added and the visualizer will not appear.");
             }
 
             html = injected;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Milkdrop: could not add the client script to index.html; serving it unchanged.");
+            _logger.LogWarning(ex, "Jellybutter: could not add the client script to index.html; serving it unchanged.");
         }
 
         var bytes = Encoding.UTF8.GetBytes(html);

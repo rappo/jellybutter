@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <RootNamespace>Jellyfin.Plugin.Milkdrop</RootNamespace>
+    <RootNamespace>Jellyfin.Plugin.Jellybutter</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <AnalysisMode>AllEnabledByDefault</AnalysisMode>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -38,14 +38,14 @@
   </Target>
 
   <ItemGroup>
-    <EmbeddedResource Include="Configuration\configPage.html" LogicalName="Jellyfin.Plugin.Milkdrop.Configuration.configPage.html" />
-    <EmbeddedResource Include="Web\milkdrop.js" LogicalName="Jellyfin.Plugin.Milkdrop.Web.milkdrop.js" />
-    <EmbeddedResource Include="$(ButterchurnBundle)" LogicalName="Jellyfin.Plugin.Milkdrop.Web.butterchurn.min.js" />
-    <EmbeddedResource Include="$(ButterchurnPresetsBundle)" LogicalName="Jellyfin.Plugin.Milkdrop.Web.butterchurnPresets.min.js" />
+    <EmbeddedResource Include="Configuration\configPage.html" LogicalName="Jellyfin.Plugin.Jellybutter.Configuration.configPage.html" />
+    <EmbeddedResource Include="Web\jellybutter.js" LogicalName="Jellyfin.Plugin.Jellybutter.Web.jellybutter.js" />
+    <EmbeddedResource Include="$(ButterchurnBundle)" LogicalName="Jellyfin.Plugin.Jellybutter.Web.butterchurn.min.js" />
+    <EmbeddedResource Include="$(ButterchurnPresetsBundle)" LogicalName="Jellyfin.Plugin.Jellybutter.Web.butterchurnPresets.min.js" />
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Jellyfin.Plugin.Milkdrop.Tests" />
+    <InternalsVisibleTo Include="Jellyfin.Plugin.Jellybutter.Tests" />
   </ItemGroup>
 
 </Project>

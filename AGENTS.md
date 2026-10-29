@@ -1,4 +1,4 @@
-# AGENTS.md: jellyfin-plugin-milkdrop
+# AGENTS.md: jellybutter
 
 A Jellyfin 12 server plugin that adds a Butterchurn (MilkDrop 2) visualizer to jellyfin-web and Jellyfin
 Desktop. This file is authoritative for the repo; `CLAUDE.md` only points here.
@@ -8,13 +8,13 @@ Desktop. This file is authoritative for the repo; `CLAUDE.md` only points here.
 - **Server:** C# on .NET 10, `Jellyfin.Controller` 12.2.0 (`ExcludeAssets="runtime"`, the host provides it
   at run time), central package versions in `Directory.Packages.props`, StyleCop + all analyzers with
   warnings as errors.
-- **Client:** one plain-JavaScript file, `Jellyfin.Plugin.Milkdrop/Web/milkdrop.js`, no framework, no
-  bundler. Its pure helpers are on `MilkdropCore`, exported for Node when loaded outside a browser.
+- **Client:** one plain-JavaScript file, `Jellyfin.Plugin.Jellybutter/Web/jellybutter.js`, no framework, no
+  bundler. Its pure helpers are on `JellybutterCore`, exported for Node when loaded outside a browser.
 - **Visualizer:** butterchurn 2.6.7 and butterchurn-presets 2.4.7, pinned in `package.json` and
   `package-lock.json`. The csproj copies `lib/butterchurn.min.js` and `lib/butterchurnPresets.min.js` out of
   `node_modules` into `obj/` and embeds them (`BundleButterchurn` target); with no `node_modules` it runs
   `npm ci` once. Never load them from a CDN.
-- **Tests:** xunit (`Jellyfin.Plugin.Milkdrop.Tests`) for the C#; `node:test` (`tests/`) for the script's
+- **Tests:** xunit (`Jellyfin.Plugin.Jellybutter.Tests`) for the C#; `node:test` (`tests/`) for the script's
   helpers. Both run in CI; the Docker build fails on a red C# suite.
 - **CI/release:** Forgejo Actions on the shared runner image (node + docker CLI, no dotnet, never apt-get).
   `.forgejo/workflows/ci.yml` builds inside `mcr.microsoft.com/dotnet/sdk:10.0` through the `Dockerfile`.
@@ -28,22 +28,23 @@ package.json                       pins Butterchurn; `npm test` runs tests/
 Dockerfile                         CI build: test + publish in the SDK image, output stage holds the zip's files
 Directory.Build.props              JellyfinVersion, TargetFramework, Version (regex over meta.json)
 Directory.Packages.props           central package versions
-Jellyfin.Plugin.Milkdrop/
+Jellyfin.Plugin.Jellybutter/
   Plugin.cs                        BasePlugin, GUID, VersionString, config page registration
   ServiceRegistrator.cs            registers the IStartupFilter
   Configuration/PluginConfiguration.cs   Enabled, DesktopWebAudio, CycleSeconds, BlendSeconds, ControlButton,
-                                   FloatingButton, DefaultView, LyricsSize
+                                   FloatingButton, NowPlayingBar, DefaultView, LyricsSize
+  Configuration/LegacyConfiguration.cs   copies the pre-rename settings file (Jellyfin.Plugin.Milkdrop.xml)
   Configuration/configPage.html    the settings page (legacy plugin page; tooltips on each control)
   WebUi/ClientSettings.cs          the clamped settings record and its camel-case JSON
   WebUi/IndexHtmlInjector.cs       pure: builds the tag, inserts it once before </body>
   WebUi/ScriptInjection.cs         IStartupFilter middleware: buffers 200 text/html GET of /web/index.html
                                    (and /web, /web/), rewrites, serves with its own ETag; else passthrough
-  Api/MilkdropController.cs        GET Milkdrop/client.js, butterchurn.js, butterchurn-presets.js (anonymous)
+  Api/JellybutterController.cs     GET Jellybutter/client.js, butterchurn.js, butterchurn-presets.js (anonymous)
   Api/EmbeddedAsset.cs             embedded resource + content-hash ETag + assembly write time
   Api/ConditionalGet.cs            If-None-Match / If-Modified-Since decision
-  Web/milkdrop.js                  the client script
-Jellyfin.Plugin.Milkdrop.Tests/    xunit
-tests/                             node:test for milkdrop.js's MilkdropCore
+  Web/jellybutter.js               the client script
+Jellyfin.Plugin.Jellybutter.Tests/ xunit
+tests/                             node:test for jellybutter.js's JellybutterCore
 .forgejo/workflows/ci.yml          build, test, release, manifest
 .forgejo/scripts/update-manifest.js  adds a version (md5, URL, timestamp) to manifest.json
 ```
@@ -54,11 +55,11 @@ tests/                             node:test for milkdrop.js's MilkdropCore
 npm ci                      # once; fetches the pinned Butterchurn bundles
 npm test                    # node:test over tests/
 dotnet test                 # restores Jellyfin 12.2.0 packages from NuGet, builds, runs xunit
-dotnet publish Jellyfin.Plugin.Milkdrop -c Release -o dist   # dist/Jellyfin.Plugin.Milkdrop.dll
+dotnet publish Jellyfin.Plugin.Jellybutter -c Release -o dist   # dist/Jellyfin.Plugin.Jellybutter.dll
 ```
 
-A plugin folder for a server is `Jellyfin.Plugin.Milkdrop.dll` + `meta.json` under
-`<data>/plugins/Milkdrop_<version>/`. Jellyfin reads `targetAbi` from meta.json and refuses a plugin built
+A plugin folder for a server is `Jellyfin.Plugin.Jellybutter.dll` + `meta.json` under
+`<data>/plugins/Jellybutter Visualizer_<version>/`. Jellyfin reads `targetAbi` from meta.json and refuses a plugin built
 for a newer ABI than the server.
 
 ### Local end-to-end check without Docker
@@ -72,14 +73,14 @@ run `jellyfin/jellyfin --datadir D --configdir C --cachedir K --logdir L --webdi
 - Lyrics for the test tracks: an `.lrc` (synced) or `.txt` (plain) file next to a FLAC with the same base
   name, then `POST /Library/Refresh`; `GET /Audio/{id}/Lyrics` returns `{ Lyrics: [{ Text, Start? }] }`
   with `Start` in 100 ns ticks, or 404 when a track has none.
-- `curl -s http://127.0.0.1:8096/web/index.html | grep data-jf-milkdrop` shows the injected tag.
-- `curl -sI http://127.0.0.1:8096/Milkdrop/client.js?v=<version>` is 200 with `cache-control: public, max-age=31536000, immutable`.
-- The server log has `Milkdrop: client script added to index.html at request time.` after the first page load.
+- `curl -s http://127.0.0.1:8096/web/index.html | grep data-jellybutter` shows the injected tag.
+- `curl -sI http://127.0.0.1:8096/Jellybutter/client.js?v=<version>` is 200 with `cache-control: public, max-age=31536000, immutable`.
+- The server log has `Jellybutter: client script added to index.html at request time.` after the first page load.
 
 ## Release
 
 1. Bump `version` (and `changelog`) in `meta.json`. Commit on `main` and push.
-2. CI builds, tests, zips `Jellyfin.Plugin.Milkdrop.dll` + `meta.json`, creates release `v<version>` with
+2. CI builds, tests, zips `Jellyfin.Plugin.Jellybutter.dll` + `meta.json`, creates release `v<version>` with
    the zip attached, and commits `manifest.json` (md5, download URL, timestamp) back to `main` with
    `[skip ci]`. A version that already has a release is skipped, so a push without a bump publishes nothing.
 3. Jellyfin servers that added `.../raw/branch/main/manifest.json` as a repository pick it up.
@@ -141,7 +142,18 @@ The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_T
   at the top and bottom edges with a mask.
 - **The opening view is the setting, every time:** `open()` sets lyrics on or off from
   `config.defaultView`; `l` and the Lyrics control toggle it for the rest of that session of the overlay.
-- **`window.jfMilkdrop`** is a read-only diagnostic handle (version, config, core helpers, live state) for a
+- **The Now Playing bar is jellyfin-web's own**, not a copy. jellyfin-web's bar module listens for
+  `viewbeforeshow` on `document` and shows (and keeps updating) the bar only while the last one carried
+  `detail.options.enableMediaControl`; the Now Playing page sets it false. Opening the visualizer
+  dispatches a `viewbeforeshow` on `document` with it true (marked `detail.jellybutter`), closing dispatches
+  the page's real value, recorded from the real events by a capture listener. Every other `viewbeforeshow`
+  listener in jellyfin-web 12.4 is on a view element, which an event dispatched on `document` never
+  reaches. A real page change while the visualizer is open re-asserts it after jellyfin-web's handler.
+  `html.jellybutter-bar` lifts `.appfooter` (z-index 1201 !important in jellyfin-web) above the overlay and
+  pins it against headroom; the overlay's controls and lyrics stop above the bar via `--jellybutter-bar`,
+  measured from the footer and kept current by a MutationObserver on it while open (`barInset`). The TV
+  layout never builds the bar (jellyfin-web checks `layoutManager.tv`), so there the inset is 0.
+- **`window.jellybutter`** is a read-only diagnostic handle (version, config, core helpers, live state) for a
   devtools session on a client in the field.
 - **Hotkeys use `window` keydown in the capture phase** with `stopImmediatePropagation`, so `Escape` closes
   the visualizer instead of being jellyfin-web's "back".
@@ -152,6 +164,15 @@ The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_T
   plugin update replaces a cached page.
 
 ## Lessons
+
+- 2026-10-29: Renamed from "Milkdrop Visualizer" (`Jellyfin.Plugin.Milkdrop`, repo `jellyfin-plugin-milkdrop`)
+  to "Jellybutter Visualizer" in 1.2.0.0; the GUID stays, which is what makes it an update. Jellyfin 12.2
+  facts behind the migration (`BasePluginOfT.cs`, `PluginManager.cs`, `InstallationManager.cs` at v12.2):
+  the config file is named after the DLL, hence `LegacyConfiguration`; the catalog matches installed
+  plugins by GUID, so the old name still finds the update; installing it marks the old version Superseded
+  by GUID, but startup cleanup deletes old folders only by matching name, so the
+  `Milkdrop Visualizer_1.1.0.0` folder stays on a server until removed by hand. Old releases keep their
+  `jellyfin-plugin-milkdrop_<version>.zip` asset names; only the repo path in manifest.json changed.
 
 - 2026-10-27: In the TV layout, jellyfin-web's D-pad choice is geometry over the focused element's
   *scaled* box (`.show-focus:focus` scales it), and at a 1280x720 window the volume's mute button wraps

@@ -1,9 +1,9 @@
 using System;
 using System.Globalization;
 using System.Net;
-using Jellyfin.Plugin.Milkdrop.Api;
+using Jellyfin.Plugin.Jellybutter.Api;
 
-namespace Jellyfin.Plugin.Milkdrop.WebUi;
+namespace Jellyfin.Plugin.Jellybutter.WebUi;
 
 /// <summary>
 /// The pure half of script injection: adds the client script tag to a jellyfin-web index.html.
@@ -14,7 +14,7 @@ internal static class IndexHtmlInjector
     /// The attribute that marks the tag, so a second pass (or a tag pasted into a custom index.html by hand)
     /// is recognized and nothing doubles up.
     /// </summary>
-    public const string Marker = "data-jf-milkdrop";
+    public const string Marker = "data-jellybutter";
 
     /// <summary>
     /// The attribute that carries the settings JSON.
@@ -36,7 +36,7 @@ internal static class IndexHtmlInjector
 
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"<script {Marker} {ConfigAttribute}=\"{WebUtility.HtmlEncode(settings.ToJson())}\" src=\"../{MilkdropController.ClientScriptPath}?v={Uri.EscapeDataString(version)}\"></script>");
+            $"<script {Marker} {ConfigAttribute}=\"{WebUtility.HtmlEncode(settings.ToJson())}\" src=\"../{JellybutterController.ClientScriptPath}?v={Uri.EscapeDataString(version)}\"></script>");
     }
 
     /// <summary>

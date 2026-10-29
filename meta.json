@@ -1,15 +1,15 @@
 {
   "guid": "7efeb814-3e67-466d-a2a1-6842ef86a500",
-  "name": "Milkdrop Visualizer",
-  "version": "1.1.0.0",
+  "name": "Jellybutter Visualizer",
+  "version": "1.2.0.0",
   "targetAbi": "12.2.0.0",
   "framework": "net10.0",
   "overview": "A MilkDrop 2 music visualizer (Butterchurn) inside the Jellyfin web client and Jellyfin Desktop.",
-  "description": "Adds a Butterchurn (MilkDrop 2, WebGL) visualizer to the Jellyfin web client. A button in the Now Playing controls (and a floating one elsewhere) opens it full screen with random presets that cycle automatically, optionally with the track's lyrics over it, and keyboard shortcuts (v toggle, l lyrics, b next, n previous, Escape close) that a controller layout can map to. On Jellyfin Desktop, music is routed through the web player so the visualizer can hear it while video stays on mpv. Everything is served by the plugin; nothing is loaded from the internet.",
+  "description": "Adds a Butterchurn (MilkDrop 2, WebGL) visualizer to the Jellyfin web client. A button in the Now Playing controls (and a floating one elsewhere) opens it full screen with random presets that cycle automatically, optionally with the track's lyrics over it and the Now Playing bar along the bottom, and keyboard shortcuts (v toggle, l lyrics, b next, n previous, Escape close) that a controller layout can map to. On Jellyfin Desktop, music is routed through the web player so the visualizer can hear it while video stays on mpv. Everything is served by the plugin; nothing is loaded from the internet.",
   "category": "General",
   "owner": "rappo",
   "artifacts": [
-    "Jellyfin.Plugin.Milkdrop.dll"
+    "Jellyfin.Plugin.Jellybutter.dll"
   ],
-  "changelog": "1.1.0.0 - A visualizer button in the Now Playing controls (between Lyrics and Shuffle); a lyrics view over the visualizer (l key, Lyrics button) fed by Jellyfin's Lyrics API; settings for the buttons, the opening view and the lyrics size.\n1.0.1.0 - Settings page: the version label works and help tooltips stay inside the window.\n1.0.0.0 - First release: Butterchurn visualizer with auto-cycling presets, hotkeys, a focusable toggle button, and web-player audio on Jellyfin Desktop."
+  "changelog": "1.2.0.0 - Renamed to Jellybutter Visualizer (settings carry over). The web client's Now Playing bar shows along the bottom of the visualizer, on by default.\n1.1.0.0 - A visualizer button in the Now Playing controls (between Lyrics and Shuffle); a lyrics view over the visualizer (l key, Lyrics button) fed by Jellyfin's Lyrics API; settings for the buttons, the opening view and the lyrics size.\n1.0.1.0 - Settings page: the version label works and help tooltips stay inside the window.\n1.0.0.0 - First release: Butterchurn visualizer with auto-cycling presets, hotkeys, a focusable toggle button, and web-player audio on Jellyfin Desktop."
 }

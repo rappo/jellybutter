@@ -20,8 +20,9 @@ repository, updated from there; nothing to install on any client.
   drop shadow, accent glow on the current line). Lyrics come from Jellyfin's own Lyrics API, so whatever
   feeds the web client's lyrics page (sidecar `.lrc`/`.txt` files, the LrcLib plugin) feeds this too.
   Synced lyrics follow the music: the current line is large and centered, past lines dimmed above,
-  upcoming lines below, with a smooth move on every change. Unsynced lyrics sit as a block, centered when
-  they fit and scrolled with playback progress when they do not. A setting picks whether the visualizer
+  upcoming lines below, with a smooth move on every change. Unsynced lyrics (plain text, no timestamps)
+  cannot follow the music, so they sit still, whole, sized down or set in columns to fit the screen. A
+  `.lrc` file with `[mm:ss.xx]` times gives synced lyrics. A setting picks whether the visualizer
   opens with or without lyrics; `l` or the Lyrics button toggles them while it is open.
 - The web client's own **Now Playing bar** (artwork, track, artist, playback controls, volume) stays along
   the bottom of the visualizer, live, from whichever page it was opened (setting, on by default). The TV

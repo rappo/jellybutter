@@ -144,9 +144,12 @@ The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_T
   item id parsed out of the `<audio>` element's URL (`Audio/{id}/universal`, `Audio/{id}/stream.*`).
   `Start` is in 100 ns ticks; `normalizeLyrics` turns it into seconds and sorts. Lyrics are synced only
   when every line has a time. The current line is picked by the element's `currentTime` on every rendered
-  frame (`lyricIndexAt`), classes and the column's transform change only when the index changes; an
-  unsynced block is centered when it fits and translated by playback progress when taller than the view
-  (`blockOffset`). Readability over any preset comes from the text stroke under the fill
+  frame (`lyricIndexAt`), classes and the column's transform change only when the index changes. Unsynced
+  lyrics have no timing to follow, so they never move: `fitLyrics` picks the largest text scale (and up to
+  three columns) at which the whole block fits the middle 76% of the view, measured on each layout
+  change (open, resize, bar height); the lines there have no font-size transition, or each measurement
+  would read the previous size. (Up to 1.3 a tall block scrolled with playback progress, which read as
+  lyrics out of time.) Readability over any preset comes from the text stroke under the fill
   (`paint-order: stroke fill`), the drop shadow and the accent glow on the current line; the column fades
   at the top and bottom edges with a mask.
 - **The opening view is the setting, every time:** `open()` sets lyrics on or off from
@@ -179,6 +182,9 @@ The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_T
   button itself. Focus moves by geometry (`nextFocusIndex`) among the overlay's buttons and jellyfin-web's
   bar buttons. The controls fade 2.5 s after the last key even while one holds focus; the first key
   after that only wakes them.
+- **No page scrollbar while open:** `html.jellybutter-open` sets `overflow: hidden` on the root and body,
+  because the root scrollbar paints beside a fixed overlay rather than under it. The scroll position is
+  kept and the scrollbar returns on close.
 - **`window.jellybutter`** is a read-only diagnostic handle (version, config, core helpers, live state) for a
   devtools session on a client in the field.
 - **Hotkeys use `window` keydown in the capture phase** with `stopImmediatePropagation`, so `Escape` (and

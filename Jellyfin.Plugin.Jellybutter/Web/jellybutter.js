@@ -21,8 +21,8 @@
  *     plugin, then renders full screen with a random starting preset, auto-cycling, blended changes and
  *     a preset-name flash.
  *   - Lyrics view: the track's lyrics from Jellyfin's Lyrics API over the visualizer. Synced lyrics follow
- *     the audio element's clock with the current line large and glowing; unsynced lyrics sit as a block,
- *     centered when they fit and scrolled with playback progress when they do not.
+ *     the audio element's clock with the current line large and glowing; unsynced lyrics (no timestamps,
+ *     so nothing to follow) sit still, whole, sized down or set in columns until they fit.
  *   - Now Playing bar: jellyfin-web's own bar along the bottom of the visualizer, live, on every page. jellyfin-web
  *     shows it only on views whose options allow media control, read from the viewbeforeshow event on the
  *     document; opening tells it "allowed" with that same event and closing hands back the page's own value.
@@ -346,14 +346,26 @@
         },
 
         /**
-         * The vertical offset of an unsynced lyrics block: none while it fits its viewport (CSS centers
-         * it), else scrolled with playback progress so the end of the block arrives with the end of the
-         * track.
+         * How to show unsynced lyrics whole and still: they carry no timing, so any movement would be a
+         * guess. `measure(scale, columns)` lays the block out at that text scale and column count and returns
+         * its height. The largest scale that fits `available` wins, trying one column down to 0.7 of the set
+         * size, then two down to 0.55, then three down to 0.45; past that, three columns at 0.45.
          */
-        blockOffset: function (blockHeight, viewHeight, progress) {
-            if (!(blockHeight > viewHeight)) { return 0; }
-            var p = isFinite(progress) ? Math.min(1, Math.max(0, progress)) : 0;
-            return -Math.round((blockHeight - viewHeight) * p) || 0;
+        fitLyrics: function (measure, available) {
+            var floors = [0.7, 0.55, 0.45];
+            if (typeof measure !== 'function' || !(available > 0)) { return { scale: 1, columns: 1 }; }
+            for (var columns = 1; columns <= floors.length; columns++) {
+                if (measure(1, columns) <= available) { return { scale: 1, columns: columns }; }
+                var lo = floors[columns - 1];
+                if (measure(lo, columns) > available) { continue; }
+                var hi = 1;
+                for (var i = 0; i < 7; i++) {
+                    var mid = (lo + hi) / 2;
+                    if (measure(mid, columns) <= available) { lo = mid; } else { hi = mid; }
+                }
+                return { scale: Math.floor(lo * 100) / 100, columns: columns };
+            }
+            return { scale: floors[floors.length - 1], columns: floors.length };
         },
 
         /** The plugin folder the client script was served from, so the bundles resolve beside it. */
@@ -447,7 +459,7 @@
         index: 0,
         open: false,
         lyricsOn: false,
-        lyrics: { itemId: null, data: null, index: -2, offset: null, elements: [] },
+        lyrics: { itemId: null, data: null, index: -2, elements: [] },
         raf: 0,
         cycleTimer: 0,
         flashTimer: 0,
@@ -461,7 +473,8 @@
         barMeta: undefined,     // the Media Session metadata the TV bar last showed
         barPaused: null,
         barTime: null,
-        barFraction: -1
+        barFraction: -1,
+        barInset: -1            // the --jellybutter-bar value last set, in px
     };
 
     var ui = {};
@@ -486,6 +499,8 @@
             '.jellybutter-toggle-wrap.jellybutter-playing .jellybutter-toggle line:nth-child(5){animation-duration:1s;animation-delay:-.5s}',
             '@media (prefers-reduced-motion:reduce){.jellybutter-toggle-wrap.jellybutter-playing .jellybutter-toggle line{animation:none}}',
             '.jellybutter-overlay{position:fixed;inset:0;z-index:99999;background:#000;display:none;font-family:inherit}',
+            // The page's own scrollbar paints beside a fixed overlay, not under it: no page scrolling while open.
+            'html.jellybutter-open,html.jellybutter-open body{overflow:hidden!important}',
             '.jellybutter-overlay.jellybutter-open{display:block}',
             '.jellybutter-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}',
             '.jellybutter-toast{position:absolute;top:1em;left:1em;padding:.5em .9em;background:rgba(0,0,0,.55);color:#fff;border-radius:.5em;font:600 .95em/1.3 sans-serif;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .3s}',
@@ -514,8 +529,10 @@
             '.jellybutter-lyrics-large{--jellybutter-line:2em;--jellybutter-active:3.2em}',
             '.jellybutter-lyrics-scroll{position:absolute;left:8vw;right:8vw;top:0;will-change:transform}',
             '.jellybutter-lyrics-synced .jellybutter-lyrics-scroll{transition:transform .5s cubic-bezier(.2,.7,.2,1)}',
-            '.jellybutter-lyrics-block{position:absolute;left:8vw;right:8vw;top:50%;transform:translateY(-50%)}',
-            '.jellybutter-lyrics-block.jellybutter-lyrics-tall{top:0;transform:none;padding:12vh 0}',
+            '.jellybutter-lyrics-block{position:absolute;left:8vw;right:8vw;top:50%;transform:translateY(-50%);column-gap:6vw}',
+            // No font-size transition here: fitLyrics measures each size it tries, and a transitioning line
+            // would still report the previous one.
+            '.jellybutter-lyrics-block .jellybutter-lyric{break-inside:avoid;transition:none}',
             // Readable over any preset: a dark stroke under the fill, a dark drop shadow, and on the
             // current line the accent glow.
             '.jellybutter-lyric{margin:0;padding:.18em 0;color:rgba(255,255,255,.92);font-size:var(--jellybutter-line);font-weight:500;line-height:1.3;' +
@@ -1023,7 +1040,6 @@
     function renderLyrics() {
         var data = state.lyrics.data;
         state.lyrics.index = -2;
-        state.lyrics.offset = null;
         if (!data) {
             lyricsNote('No lyrics found');
             return;
@@ -1044,7 +1060,10 @@
         updateLyrics(true);
     }
 
-    /** Follows the audio clock: moves the current synced line to the center, or scrolls an unsynced block. */
+    /**
+     * Follows the audio clock for synced lyrics, moving the current line to the center. Unsynced lyrics have
+     * no clock to follow: they are fitted to the view once per layout (force) and never move.
+     */
     function updateLyrics(force) {
         var data = state.lyrics.data;
         var holder = state.lyrics.holder;
@@ -1066,16 +1085,15 @@
             }
             return;
         }
-        var blockHeight = holder.scrollHeight;
-        var tall = blockHeight > viewHeight;
-        holder.classList.toggle('jellybutter-lyrics-tall', tall);
-        var duration = state.audio.duration;
-        var progress = duration > 0 ? time / duration : 0;
-        var offset = JellybutterCore.blockOffset(blockHeight, viewHeight, progress);
-        if (force || offset !== state.lyrics.offset) {
-            state.lyrics.offset = offset;
-            holder.style.transform = tall ? 'translateY(' + offset + 'px)' : '';
-        }
+        if (!force) { return; }
+        // Clear of the faded top and bottom edges (the mask's 12% each way).
+        var fit = JellybutterCore.fitLyrics(function (scale, columns) {
+            holder.style.fontSize = scale + 'em';
+            holder.style.columnCount = columns > 1 ? String(columns) : '';
+            return holder.scrollHeight;
+        }, Math.floor(viewHeight * 0.76));
+        holder.style.fontSize = fit.scale + 'em';
+        holder.style.columnCount = fit.columns > 1 ? String(fit.columns) : '';
     }
 
     // ---- Now Playing bar -----------------------------------------------------------------------------------
@@ -1103,14 +1121,19 @@
     }
 
     function updateBarInset() {
+        var inset = 0;
         if (state.tvBar) {
-            ui.overlay.style.setProperty('--jellybutter-bar', (state.open ? ui.tvBar.offsetHeight : 0) + 'px');
-            return;
+            inset = state.open ? ui.tvBar.offsetHeight : 0;
+        } else {
+            var bar = config.nowPlayingBar && state.open ? document.querySelector('.appfooter .nowPlayingBar') : null;
+            var footer = bar && bar.closest('.appfooter');
+            inset = JellybutterCore.barInset(bar ? bar.className : null, footer ? footer.offsetHeight : 0);
         }
-        var bar = config.nowPlayingBar && state.open ? document.querySelector('.appfooter .nowPlayingBar') : null;
-        var footer = bar && bar.closest('.appfooter');
-        var inset = JellybutterCore.barInset(bar ? bar.className : null, footer ? footer.offsetHeight : 0);
+        if (inset === state.barInset) { return; }
+        state.barInset = inset;
         ui.overlay.style.setProperty('--jellybutter-bar', inset + 'px');
+        // The lyrics view ends at the bar, so its height just changed.
+        if (state.lyricsOn) { updateLyrics(true); }
     }
 
     // jellyfin-web never builds its bar in the TV layout (its module returns early there), so on a TV the
@@ -1274,6 +1297,7 @@
             state.open = true;
             state.lastFocus = document.activeElement;
             ui.overlay.classList.add('jellybutter-open');
+            document.documentElement.classList.add('jellybutter-open');
             ui.toggle.setAttribute('aria-pressed', 'true');
             try {
                 if (!state.visualizer) { createVisualizer(); } else { resize(); }
@@ -1316,6 +1340,7 @@
         clearInterval(state.cycleTimer);
         state.cycleTimer = 0;
         ui.overlay.classList.remove('jellybutter-open');
+        document.documentElement.classList.remove('jellybutter-open');
         ui.toggle.setAttribute('aria-pressed', 'false');
         hideBar();
         refreshButtons();

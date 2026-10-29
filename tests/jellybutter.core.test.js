@@ -208,15 +208,21 @@ test('lyricIndexAt: the last line that has started, -1 before the first', () => 
     assert.equal(core.lyricIndexAt(undefined, 5), -1);
 });
 
-test('blockOffset: an unsynced block stays put while it fits and scrolls with progress when it does not', () => {
-    assert.equal(core.blockOffset(400, 800, 0.5), 0);
-    assert.equal(core.blockOffset(800, 800, 1), 0);
-    assert.equal(core.blockOffset(1800, 800, 0), 0);
-    assert.equal(core.blockOffset(1800, 800, 0.5), -500);
-    assert.equal(core.blockOffset(1800, 800, 1), -1000);
-    assert.equal(core.blockOffset(1800, 800, 7), -1000);
-    assert.equal(core.blockOffset(1800, 800, -1), 0);
-    assert.equal(core.blockOffset(1800, 800, NaN), 0);
+test('fitLyrics: whole and still, the largest text that fits, columns only when one is too small', () => {
+    // A block 1000px tall at full size in one column; columns split it evenly.
+    const block = (scale, columns) => Math.ceil(1000 * scale / columns);
+    assert.deepEqual(core.fitLyrics(block, 1200), { scale: 1, columns: 1 });           // fits as set
+    const one = core.fitLyrics(block, 800);                                           // shrinks in one column
+    assert.equal(one.columns, 1);
+    assert.ok(one.scale >= 0.79 && one.scale <= 0.8, String(one.scale));
+    assert.ok(block(one.scale, 1) <= 800);
+    assert.deepEqual(core.fitLyrics(block, 600), { scale: 1, columns: 2 });           // 0.6 < 0.7: two columns instead
+    const two = core.fitLyrics(block, 400);
+    assert.equal(two.columns, 2);
+    assert.ok(two.scale >= 0.79 && block(two.scale, 2) <= 400, String(two.scale));
+    assert.deepEqual(core.fitLyrics(block, 100), { scale: 0.45, columns: 3 });       // never fits: smallest, three
+    assert.deepEqual(core.fitLyrics(block, 0), { scale: 1, columns: 1 });
+    assert.deepEqual(core.fitLyrics(null, 800), { scale: 1, columns: 1 });
 });
 
 test('mediaControlFor: the open visualizer allows the bar; closed, or with the setting off, the page decides', () => {

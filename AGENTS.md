@@ -73,7 +73,7 @@ startup cleanup never removes it), and restart. Without the Superseded mark both
 
 ### Local end-to-end check without Docker
 
-This machine has no Docker. The Jellyfin portable build works instead: download
+Where Docker is not available, the Jellyfin portable build works instead: download
 `https://repo.jellyfin.org/files/server/linux/stable/v12.2/amd64/jellyfin_12.2-amd64.tar.gz`, extract, and
 run `jellyfin/jellyfin --datadir D --configdir C --cachedir K --logdir L --webdir jellyfin/jellyfin-web
 --ffmpeg /usr/bin/ffmpeg` with the plugin folder under `D/plugins/`. Complete the startup wizard with the
@@ -231,14 +231,14 @@ into the repo by hand; docs use `<forgejo-host>`.
 
 - 2026-10-27: Jellyfin Desktop can be driven headlessly for verification: `flatpak run
   org.jellyfin.JellyfinDesktop --create-profile <name>`, then `--profile <name> --remote-debugging-port 9222
-  --windowed --log-level debug`; a second instance on its own profile leaves the user's running one alone.
+  --windowed --log-level debug`; a second instance on its own profile leaves an already running one alone.
   The profile's log is under `~/.var/app/org.jellyfin.JellyfinDesktop/data/jellyfin-desktop/profiles/<id>/logs/`
   and forwards the page's console. Confirmed there: `NativeShell.getPlugins()` loses `mpvAudioPlayer`, an
   `<audio>` element plays the track, the toggle appears, WebGL 2 renders full screen, v/b/n/Escape work.
-- 2026-10-27: The desktop app's built-in browser pane has no WebGL at all and the laptop's audio sink was
-  `auto_null`, so neither rendering nor audible output can be verified there; Chromium stalls a media
-  element routed through Web Audio when the audio device fails ("The AudioContext encountered an error
-  from the audio device"). Not a plugin fault: mpv in the same session logged `ao/pulse: Init failed`.
+- 2026-10-27: With no working audio output device, Chromium stalls a media element routed through Web
+  Audio ("The AudioContext encountered an error from the audio device"). Not a plugin fault: mpv in the
+  same session logged `ao/pulse: Init failed`. Verify playback on a machine with a real audio sink; a
+  muted element on a static test page (with `window.ApiClient` stubbed) is enough for layout checks.
 
 - 2026-10-27: jellyfin-web 12.2's `htmlAudioPlayer` creates `<audio class="mediaPlayerAudio">` on the body
   and keeps it; `stop()` pauses and may remove it. Watching by selector plus a MutationObserver covers both.

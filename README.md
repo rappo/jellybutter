@@ -6,6 +6,8 @@ repository, updated from there; nothing to install on any client.
 
 ## Screenshots
 
+![The visualizer running full screen on a TV, the preset changing color with the ambient lights, with only the track, artwork and progress showing](docs/demo.webp)
+
 ![Synced lyrics over the visualizer on a TV: the current line large and glowing, the Now Playing bar with artwork, track, transport buttons and time along the bottom](docs/screenshots/tv-synced-lyrics.png)
 
 ![Synced lyrics over a darker preset on a TV, with the Now Playing bar](docs/screenshots/tv-synced-lyrics-2.png)

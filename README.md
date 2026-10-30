@@ -14,13 +14,13 @@ repository, updated from there; nothing to install on any client.
 
 ## What it does
 
-- **Full-screen MilkDrop visualizer** with auto-cycling presets, opened from a button in Now Playing or a
+- **Full-screen MilkDrop visualizer** with presets that change on a timer or per song, opened from a button in Now Playing or a
   floating button anywhere else.
 - **Lyrics over the visualizer:** synced lyrics follow the music; plain lyrics show still, fitted to the
   screen.
 - **Now Playing bar** under the visualizer: track, artwork, controls and progress.
 - **TV and controller friendly:** D-pad, remote or gamepad. Back hides the UI, a second Back closes.
-- **Idle mode:** opens by itself after 2 minutes of music with no input.
+- **Idle mode:** opens by itself after 2 minutes of music with no input, and minimizes its UI when left alone.
 - **Hotkeys:** `v` visualizer, `l` lyrics, `b`/`n` next/previous preset.
 - **Jellyfin Desktop:** routes music through the web player so the visualizer can hear it; video stays on
   mpv.
@@ -49,7 +49,9 @@ Dashboard > Plugins > Jellybutter Visualizer.
 | --- | --- | --- |
 | Add the visualizer to the web client | on | The master switch. Off, the web client is served untouched and the plugin's files answer 404. |
 | Play music in the web player on Jellyfin Desktop | on | Hide mpv's audio player from the web client so music plays through the web player (video stays on mpv). |
-| Change preset every (seconds) | 30 | 0 keeps a preset until you change it. |
+| Change presets | Every few seconds | Or "Per song". |
+| Change preset every (seconds) | 30 | Every few seconds: 0 keeps a preset until you change it. |
+| Changes per song | 1 | Per song: 1 is a new preset with each song, 2 also halfway through, up to 20. |
 | Blend between presets (seconds) | 2.7 | 0 switches instantly. |
 | Visualizer button in the Now Playing controls | on | The icon button between Lyrics and Shuffle. |
 | Floating visualizer button on other pages | on | The round button at the bottom right wherever the Now Playing controls are not on screen. |
@@ -58,7 +60,7 @@ Dashboard > Plugins > Jellybutter Visualizer.
 | Lyrics text size | Medium | Small, Medium or Large. |
 | Open the visualizer when idle | on | While music plays and nothing is pressed for the idle time, the visualizer opens by itself. |
 | Idle time (minutes) | 2 | 1 to 60. |
-| Hide the controls when it opens | on | The idle visualizer shows only the track, artwork, time and progress until a key is pressed. |
+| Minimize the UI when idle | on | Only the track, artwork, time and progress stay until a key is pressed: the idle visualizer opens that way, and one opened by hand minimizes after the idle time. |
 
 Settings take effect on the next page load of the web client (a reload, or reopening the desktop client).
 

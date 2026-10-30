@@ -19,7 +19,7 @@ public class ScriptInjectionMiddlewareTests
 {
     private const string HostHtml = "<html><body><h1>jellyfin</h1></body></html>";
     private static readonly DateTimeOffset _hostModified = new(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
-    private static readonly ClientSettings _settings = new(true, 30, 2.7, true, true, true, "visualizer", "medium", true, 2, true);
+    private static readonly ClientSettings _settings = new(true, 30, 2.7, true, true, true, "visualizer", "medium", true, 2, true, "seconds", 1);
 
     private static ScriptInjection Middleware(bool enabled = true)
         => new(NullLogger<ScriptInjection>.Instance, () => enabled ? _settings : null);
@@ -98,7 +98,7 @@ public class ScriptInjectionMiddlewareTests
         var before = await Serve(Request());
         var context = Request(ifNoneMatch: TagOf(before));
 
-        await new ScriptInjection(NullLogger<ScriptInjection>.Instance, () => new ClientSettings(false, 30, 2.7, true, true, true, "visualizer", "medium", true, 2, true)).InvokeAsync(context, () => Host(context));
+        await new ScriptInjection(NullLogger<ScriptInjection>.Instance, () => new ClientSettings(false, 30, 2.7, true, true, true, "visualizer", "medium", true, 2, true, "seconds", 1)).InvokeAsync(context, () => Host(context));
 
         Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
         Assert.NotEqual(TagOf(before), TagOf(context));

@@ -4,14 +4,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const core = require('../Jellyfin.Plugin.Jellybutter/Web/jellybutter.js');
 
-const DEFAULTS = { desktopWebAudio: true, cycleSeconds: 30, blendSeconds: 2.7, controlButton: true, floatingButton: true, nowPlayingBar: true, defaultView: 'visualizer', lyricsSize: 'medium', idleVisualizer: true, idleMinutes: 2, idleHideUi: true };
+const DEFAULTS = { desktopWebAudio: true, cycleMode: 'seconds', cycleSeconds: 30, cyclesPerTrack: 1, blendSeconds: 2.7, controlButton: true, floatingButton: true, nowPlayingBar: true, defaultView: 'visualizer', lyricsSize: 'medium', idleVisualizer: true, idleMinutes: 2, idleHideUi: true };
 
 test('parseConfig: fills defaults for a missing, malformed or partial attribute', () => {
     assert.deepEqual(core.parseConfig(null), DEFAULTS);
     assert.deepEqual(core.parseConfig('not json'), DEFAULTS);
     assert.deepEqual(core.parseConfig('{"cycleSeconds":0}'), { ...DEFAULTS, cycleSeconds: 0 });
-    assert.deepEqual(core.parseConfig('{"desktopWebAudio":false,"cycleSeconds":45,"blendSeconds":1.5,"controlButton":false,"floatingButton":false,"nowPlayingBar":false,"defaultView":"lyrics","lyricsSize":"large","idleVisualizer":false,"idleMinutes":5,"idleHideUi":false}'),
-        { desktopWebAudio: false, cycleSeconds: 45, blendSeconds: 1.5, controlButton: false, floatingButton: false, nowPlayingBar: false, defaultView: 'lyrics', lyricsSize: 'large', idleVisualizer: false, idleMinutes: 5, idleHideUi: false });
+    assert.deepEqual(core.parseConfig('{"desktopWebAudio":false,"cycleSeconds":45,"blendSeconds":1.5,"controlButton":false,"floatingButton":false,"nowPlayingBar":false,"defaultView":"lyrics","lyricsSize":"large","idleVisualizer":false,"idleMinutes":5,"idleHideUi":false,"cycleMode":"track","cyclesPerTrack":3}'),
+        { desktopWebAudio: false, cycleMode: 'track', cycleSeconds: 45, cyclesPerTrack: 3, blendSeconds: 1.5, controlButton: false, floatingButton: false, nowPlayingBar: false, defaultView: 'lyrics', lyricsSize: 'large', idleVisualizer: false, idleMinutes: 5, idleHideUi: false });
     // Idle minutes: whole minutes, 1 to 60.
     assert.equal(core.parseConfig('{"idleMinutes":0}').idleMinutes, 1);
     assert.equal(core.parseConfig('{"idleMinutes":600}').idleMinutes, 60);
@@ -27,6 +27,12 @@ test('parseConfig: fills defaults for a missing, malformed or partial attribute'
     assert.equal(core.parseConfig('{"defaultView":"Lyrics"}').defaultView, 'lyrics');
     assert.equal(core.parseConfig('{"lyricsSize":"huge"}').lyricsSize, 'medium');
     assert.equal(core.parseConfig('{"controlButton":"no"}').controlButton, true);
+    // Per-song cycling: a known mode, 1 to 20 whole changes per song; older tags cycle by seconds.
+    assert.equal(core.parseConfig('{"cycleMode":"Track"}').cycleMode, 'track');
+    assert.equal(core.parseConfig('{"cycleMode":"album"}').cycleMode, 'seconds');
+    assert.equal(core.parseConfig('{"cyclesPerTrack":0}').cyclesPerTrack, 1);
+    assert.equal(core.parseConfig('{"cyclesPerTrack":99}').cyclesPerTrack, 20);
+    assert.equal(core.parseConfig('{"cyclesPerTrack":2.6}').cyclesPerTrack, 3);
     // A tag from 1.1.0.0, before the setting existed, gets the bar.
     assert.equal(core.parseConfig('{"controlButton":true}').nowPlayingBar, true);
 });
@@ -334,6 +340,32 @@ test('isPlaying: only while the element plays, not paused, ended or missing', ()
     assert.equal(core.isPlaying({ paused: true, ended: false }), false);
     assert.equal(core.isPlaying({ paused: false, ended: true }), false);
     assert.equal(core.isPlaying(null), false);
+});
+
+test('shouldIdleHide: an open, playing visualizer minimizes after the idle minutes, once', () => {
+    const cfg = { idleHideUi: true, idleMinutes: 2 };
+    const s = { open: true, uiHidden: false, playing: true, idleMs: 120000 };
+    assert.equal(core.shouldIdleHide(cfg, s), true);
+    assert.equal(core.shouldIdleHide(cfg, { ...s, idleMs: 119999 }), false);
+    assert.equal(core.shouldIdleHide(cfg, { ...s, uiHidden: true }), false);   // already minimized
+    assert.equal(core.shouldIdleHide(cfg, { ...s, open: false }), false);
+    assert.equal(core.shouldIdleHide(cfg, { ...s, playing: false }), false);   // paused: stay as it is
+    assert.equal(core.shouldIdleHide({ ...cfg, idleHideUi: false }, s), false);
+    // Independent of opening by itself: works with the idle visualizer off.
+    assert.equal(core.shouldIdleHide({ ...cfg, idleVisualizer: false }, s), true);
+});
+
+test('trackSlice: one key per equal slice of a track, none while the length is unknown', () => {
+    assert.equal(core.trackSlice('a', 0, 200, 1), 'a#0');
+    assert.equal(core.trackSlice('a', 199.9, 200, 1), 'a#0');                    // 1: only a new track changes it
+    assert.equal(core.trackSlice('b', 0, 180, 1), 'b#0');
+    assert.equal(core.trackSlice('a', 99.9, 200, 2), 'a#0');
+    assert.equal(core.trackSlice('a', 100, 200, 2), 'a#1');                      // 2: also halfway
+    assert.equal(core.trackSlice('a', 200, 200, 3), 'a#2');                      // the very end stays in the last slice
+    assert.equal(core.trackSlice('a', 5, NaN, 2), null);                         // between tracks
+    assert.equal(core.trackSlice('a', 5, Infinity, 2), null);                    // a live stream
+    assert.equal(core.trackSlice('', 5, 200, 2), null);
+    assert.equal(core.trackSlice('a', 5, 200, 0), 'a#0');                        // a bad count acts as 1
 });
 
 test('shouldIdleOpen: only while music plays in a visible page after the idle minutes, never twice', () => {

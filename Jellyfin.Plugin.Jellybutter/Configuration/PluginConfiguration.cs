@@ -15,7 +15,9 @@ public class PluginConfiguration : BasePluginConfiguration
     {
         Enabled = true;
         DesktopWebAudio = true;
+        CycleMode = "seconds";
         CycleSeconds = 30;
+        CyclesPerTrack = 1;
         BlendSeconds = 2.7;
         ControlButton = true;
         FloatingButton = true;
@@ -40,9 +42,21 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool DesktopWebAudio { get; set; }
 
     /// <summary>
+    /// Gets or sets how presets change by themselves: "seconds" (every <see cref="CycleSeconds"/>) or "track"
+    /// (<see cref="CyclesPerTrack"/> times per song).
+    /// </summary>
+    public string CycleMode { get; set; }
+
+    /// <summary>
     /// Gets or sets how many seconds a preset stays before the next one is loaded. Zero turns auto-cycling off.
     /// </summary>
     public int CycleSeconds { get; set; }
+
+    /// <summary>
+    /// Gets or sets how many times per song the preset changes in the "track" mode: once at the start of each
+    /// track, and again at each equal slice of it after the first.
+    /// </summary>
+    public int CyclesPerTrack { get; set; }
 
     /// <summary>
     /// Gets or sets how many seconds a preset change blends over.
@@ -90,8 +104,9 @@ public class PluginConfiguration : BasePluginConfiguration
     public int IdleMinutes { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the idle visualizer opens with its controls hidden: no buttons and
-    /// no bar background, only the track, artwork, time and progress.
+    /// Gets or sets a value indicating whether the UI minimizes when idle: the idle visualizer opens with its
+    /// controls hidden (no buttons and no bar background, only the track, artwork, time and progress), and a
+    /// visualizer opened by hand hides them after <see cref="IdleMinutes"/> without input.
     /// </summary>
     public bool IdleHideUi { get; set; }
 }

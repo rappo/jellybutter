@@ -204,8 +204,13 @@ repo.
 - **The idle visualizer never opens into silence.** Without a key press behind it, `open({ idle: true })`
   only proceeds when the element is already tapped (jellyfin-web's own AudioContext) or a context of the
   script's own reaches `running` within a second (`contextCanRun`): routing the element into a context
-  that stays suspended would mute the music. Input is any keydown, input command, pointer or wheel
-  event; `checkIdle` runs every 5 s and counts its own attempt as input.
+  that stays suspended would mute the music. With `idleHideUi`, a visualizer opened by hand minimizes
+  after the same idle time while music plays (`shouldIdleHide`). Input is any keydown, input command,
+  pointer or wheel event; `checkIdle` runs every 5 s and counts its own attempt as input.
+- **Per-song preset cycling** (`cycleMode: 'track'`) runs from the render loop, not a timer: `trackSlice`
+  keys the playing element's `currentSrc` and its slice of `cyclesPerTrack` equal slices, and a new key
+  loads the next preset. The key is null while the duration is unknown, so the gap between tracks is not
+  a change of its own; the key at open is only recorded, since opening loads a preset already.
 - **Now Playing row arrows:** while closed, left/right from the button next to the visualizer button (or
   from it) step by row order (`rowStep`); jellyfin-web's geometric choice otherwise drops from Lyrics onto
   the volume control wrapped under the row. Everything else in the row stays jellyfin-web's.

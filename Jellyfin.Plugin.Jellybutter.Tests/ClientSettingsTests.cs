@@ -25,7 +25,7 @@ public class ClientSettingsTests
         Assert.True(config.IdleHideUi);
 
         var settings = ClientSettings.FromConfiguration(config);
-        Assert.Equal(new ClientSettings(true, 30, 2.7, true, true, true, "visualizer", "medium", true, 2, true), settings);
+        Assert.Equal(new ClientSettings(true, 30, 2.7, true, true, true, "visualizer", "medium", true, 2, true, "seconds", 1), settings);
     }
 
     [Theory]
@@ -90,6 +90,23 @@ public class ClientSettingsTests
         => Assert.Equal(expected, ClientSettings.FromConfiguration(new PluginConfiguration { CycleSeconds = saved })!.CycleSeconds);
 
     [Theory]
+    [InlineData("track", "track")]
+    [InlineData(" Track ", "track")]
+    [InlineData("album", "seconds")]
+    [InlineData(null, "seconds")]
+    public void CycleMode_IsOneOfTheKnownModes(string? saved, string expected)
+        => Assert.Equal(expected, ClientSettings.FromConfiguration(new PluginConfiguration { CycleMode = saved! })!.CycleMode);
+
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(0, 1)]
+    [InlineData(-3, 1)]
+    [InlineData(4, 4)]
+    [InlineData(500, ClientSettings.MaxCyclesPerTrack)]
+    public void CyclesPerTrack_IsClamped(int saved, int expected)
+        => Assert.Equal(expected, ClientSettings.FromConfiguration(new PluginConfiguration { CyclesPerTrack = saved })!.CyclesPerTrack);
+
+    [Theory]
     [InlineData(-1.0, 0.0)]
     [InlineData(1.5, 1.5)]
     [InlineData(100.0, ClientSettings.MaxBlendSeconds)]
@@ -101,8 +118,8 @@ public class ClientSettingsTests
     [Fact]
     public void ToJson_IsCompactCamelCase_AsTheScriptParsesIt()
     {
-        var json = new ClientSettings(false, 0, 2.7, true, false, true, "lyrics", "large", true, 2, true).ToJson();
+        var json = new ClientSettings(false, 0, 2.7, true, false, true, "lyrics", "large", true, 2, true, "track", 3).ToJson();
 
-        Assert.Equal("{\"desktopWebAudio\":false,\"cycleSeconds\":0,\"blendSeconds\":2.7,\"controlButton\":true,\"floatingButton\":false,\"nowPlayingBar\":true,\"defaultView\":\"lyrics\",\"lyricsSize\":\"large\",\"idleVisualizer\":true,\"idleMinutes\":2,\"idleHideUi\":true}", json);
+        Assert.Equal("{\"desktopWebAudio\":false,\"cycleSeconds\":0,\"blendSeconds\":2.7,\"controlButton\":true,\"floatingButton\":false,\"nowPlayingBar\":true,\"defaultView\":\"lyrics\",\"lyricsSize\":\"large\",\"idleVisualizer\":true,\"idleMinutes\":2,\"idleHideUi\":true,\"cycleMode\":\"track\",\"cyclesPerTrack\":3}", json);
     }
 }

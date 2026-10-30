@@ -20,7 +20,9 @@ namespace Jellyfin.Plugin.Jellybutter.WebUi;
 /// <param name="LyricsSize">The lyrics text size, one of <see cref="LyricsSizes"/>.</param>
 /// <param name="IdleVisualizer">Whether the visualizer opens by itself after idle minutes of playback.</param>
 /// <param name="IdleMinutes">Minutes without input before it does, within <see cref="MinIdleMinutes"/>..<see cref="MaxIdleMinutes"/>.</param>
-/// <param name="IdleHideUi">Whether the idle visualizer opens with its controls hidden.</param>
+/// <param name="IdleHideUi">Whether the UI minimizes when idle (the idle visualizer opens minimized).</param>
+/// <param name="CycleMode">How presets change by themselves, one of <see cref="CycleModes"/>.</param>
+/// <param name="CyclesPerTrack">Preset changes per song in the "track" mode, within 1..<see cref="MaxCyclesPerTrack"/>.</param>
 public sealed record ClientSettings(
     bool DesktopWebAudio,
     int CycleSeconds,
@@ -32,8 +34,20 @@ public sealed record ClientSettings(
     string LyricsSize,
     bool IdleVisualizer,
     int IdleMinutes,
-    bool IdleHideUi)
+    bool IdleHideUi,
+    string CycleMode,
+    int CyclesPerTrack)
 {
+    /// <summary>
+    /// The ways presets change by themselves; the first is the default.
+    /// </summary>
+    public static readonly string[] CycleModes = ["seconds", "track"];
+
+    /// <summary>
+    /// The most preset changes per song the script accepts.
+    /// </summary>
+    public const int MaxCyclesPerTrack = 20;
+
     /// <summary>
     /// The views the visualizer can open in; the first is the default.
     /// </summary>
@@ -95,7 +109,9 @@ public sealed record ClientSettings(
             PickOne(configuration.LyricsSize, LyricsSizes, LyricsSizes[1]),
             configuration.IdleVisualizer,
             Math.Clamp(configuration.IdleMinutes, MinIdleMinutes, MaxIdleMinutes),
-            configuration.IdleHideUi);
+            configuration.IdleHideUi,
+            PickOne(configuration.CycleMode, CycleModes, CycleModes[0]),
+            Math.Clamp(configuration.CyclesPerTrack, 1, MaxCyclesPerTrack));
     }
 
     private static string PickOne(string? value, string[] allowed, string fallback)

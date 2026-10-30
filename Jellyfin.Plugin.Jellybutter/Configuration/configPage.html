@@ -6,6 +6,7 @@
 <body>
 <div id="JellybutterConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-select">
     <style>
+        #JellybutterConfigPage .inputContainer[hidden] { display: none; }
         .jellybutter-help { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 1.3em; height: 1.3em; margin-left: .4em; border-radius: 50%; border: 1px solid currentColor; font-size: .8em; line-height: 1; opacity: .7; cursor: help; vertical-align: middle; }
         .jellybutter-help:hover, .jellybutter-help:focus { opacity: 1; outline: none; }
         .jellybutter-help .jellybutter-tip { position: absolute; left: 0; top: 1.7em; z-index: 10; width: max-content; max-width: min(24em, 70vw); padding: .5em .7em; border-radius: .4em; background: #202020; color: #fff; font-size: 1.1em; font-weight: 400; line-height: 1.35; white-space: normal; box-shadow: 0 .2em .8em rgba(0,0,0,.5); display: none; }
@@ -35,11 +36,26 @@
                             </span>
                         </label>
                     </div>
-                    <div class="inputContainer">
+                    <div class="selectContainer">
+                        <label class="selectLabel jellybutter-label" for="jellybutterCycleMode">Change presets
+                            <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">On a timer, or a set number of times per song.</span></span>
+                        </label>
+                        <select is="emby-select" id="jellybutterCycleMode">
+                            <option value="seconds">Every few seconds</option>
+                            <option value="track">Per song</option>
+                        </select>
+                    </div>
+                    <div class="inputContainer" id="jellybutterCycleSecondsField">
                         <label class="inputLabel inputLabelUnfocused jellybutter-label" for="jellybutterCycleSeconds">Change preset every (seconds)
                             <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">0 keeps the current preset until you change it (b next, n previous).</span></span>
                         </label>
                         <input is="emby-input" type="number" id="jellybutterCycleSeconds" min="0" max="3600" step="1" required />
+                    </div>
+                    <div class="inputContainer" id="jellybutterCyclesPerTrackField">
+                        <label class="inputLabel inputLabelUnfocused jellybutter-label" for="jellybutterCyclesPerTrack">Changes per song
+                            <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">1: a new preset with each song. 2: also halfway through, and so on (up to 20).</span></span>
+                        </label>
+                        <input is="emby-input" type="number" id="jellybutterCyclesPerTrack" min="1" max="20" step="1" required />
                     </div>
                     <div class="inputContainer">
                         <label class="inputLabel inputLabelUnfocused jellybutter-label" for="jellybutterBlendSeconds">Blend between presets (seconds)
@@ -114,8 +130,8 @@
                     <div class="checkboxContainer checkboxContainer-withDescription">
                         <label class="emby-checkbox-label">
                             <input is="emby-checkbox" type="checkbox" id="jellybutterIdleHideUi" />
-                            <span class="jellybutter-label">Hide the controls when it opens
-                                <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">Only the track, artwork, time and progress stay on screen. Any key brings the controls back.</span></span>
+                            <span class="jellybutter-label">Minimize the UI when idle
+                                <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">The idle visualizer opens minimized, and one you opened minimizes after the idle time. Any key brings the controls back.</span></span>
                             </span>
                         </label>
                     </div>
@@ -138,7 +154,9 @@
                 ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                     page.querySelector('#jellybutterEnabled').checked = config.Enabled !== false;
                     page.querySelector('#jellybutterDesktopWebAudio').checked = config.DesktopWebAudio !== false;
+                    page.querySelector('#jellybutterCycleMode').value = config.CycleMode === 'track' ? 'track' : 'seconds';
                     page.querySelector('#jellybutterCycleSeconds').value = typeof config.CycleSeconds === 'number' ? config.CycleSeconds : 30;
+                    page.querySelector('#jellybutterCyclesPerTrack').value = typeof config.CyclesPerTrack === 'number' ? config.CyclesPerTrack : 1;
                     page.querySelector('#jellybutterBlendSeconds').value = typeof config.BlendSeconds === 'number' ? config.BlendSeconds : 2.7;
                     page.querySelector('#jellybutterControlButton').checked = config.ControlButton !== false;
                     page.querySelector('#jellybutterFloatingButton').checked = config.FloatingButton !== false;
@@ -149,6 +167,7 @@
                     page.querySelector('#jellybutterIdleMinutes').value = typeof config.IdleMinutes === 'number' ? config.IdleMinutes : 2;
                     page.querySelector('#jellybutterIdleHideUi').checked = config.IdleHideUi !== false;
                     syncIdle();
+                    syncCycle();
                     Dashboard.hideLoadingMsg();
                 });
                 ApiClient.getJSON(ApiClient.getUrl('Plugins')).then(function (plugins) {
@@ -157,15 +176,23 @@
                 }).catch(function () { /* the version is a nicety */ });
             }
 
-            // The idle options only mean something while the idle visualizer is on.
+            // The idle time only means something while one of the idle options is on.
             function syncIdle() {
-                var on = page.querySelector('#jellybutterIdleVisualizer').checked;
+                var on = page.querySelector('#jellybutterIdleVisualizer').checked || page.querySelector('#jellybutterIdleHideUi').checked;
                 page.querySelector('#jellybutterIdleMinutes').disabled = !on;
-                page.querySelector('#jellybutterIdleHideUi').disabled = !on;
+            }
+
+            // Only the count for the chosen way of changing presets shows.
+            function syncCycle() {
+                var perTrack = page.querySelector('#jellybutterCycleMode').value === 'track';
+                page.querySelector('#jellybutterCycleSecondsField').hidden = perTrack;
+                page.querySelector('#jellybutterCyclesPerTrackField').hidden = !perTrack;
             }
 
             page.addEventListener('pageshow', load);
             page.querySelector('#jellybutterIdleVisualizer').addEventListener('change', syncIdle);
+            page.querySelector('#jellybutterIdleHideUi').addEventListener('change', syncIdle);
+            page.querySelector('#jellybutterCycleMode').addEventListener('change', syncCycle);
 
             // A tip opens toward the middle of the window: left-anchored from the left half, right-anchored
             // from the right half, so a short label near the left edge and a long one near the right edge
@@ -185,7 +212,9 @@
                 ApiClient.getPluginConfiguration(pluginId).then(function (config) {
                     config.Enabled = page.querySelector('#jellybutterEnabled').checked;
                     config.DesktopWebAudio = page.querySelector('#jellybutterDesktopWebAudio').checked;
+                    config.CycleMode = page.querySelector('#jellybutterCycleMode').value;
                     config.CycleSeconds = Math.max(0, Math.min(3600, Math.round(Number(page.querySelector('#jellybutterCycleSeconds').value) || 0)));
+                    config.CyclesPerTrack = Math.max(1, Math.min(20, Math.round(Number(page.querySelector('#jellybutterCyclesPerTrack').value) || 1)));
                     config.BlendSeconds = Math.max(0, Math.min(30, Number(page.querySelector('#jellybutterBlendSeconds').value) || 0));
                     config.ControlButton = page.querySelector('#jellybutterControlButton').checked;
                     config.FloatingButton = page.querySelector('#jellybutterFloatingButton').checked;

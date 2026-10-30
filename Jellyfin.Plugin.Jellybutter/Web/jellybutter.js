@@ -36,7 +36,8 @@
  *     Escape) hides the UI, leaving the track, artwork, time and progress; a second Back closes. In the Now
  *     Playing row, left and right step through the buttons around the visualizer button in row order.
  *   - Idle visualizer: while music plays and nothing is pressed for the set minutes, it opens by itself,
- *     with the UI hidden by default.
+ *     with the UI hidden by default; opened by hand, it hides the UI after the same idle time.
+ *   - Presets cycle every few seconds, or a set number of times per song (1: a new preset with each track).
  *
  * The pure helpers live on JellybutterCore and are exported for the node:test suite under tests/; the DOM
  * part only runs in a browser.
@@ -46,7 +47,9 @@
 
     var DEFAULTS = {
         desktopWebAudio: true,
+        cycleMode: 'seconds',
         cycleSeconds: 30,
+        cyclesPerTrack: 1,
         blendSeconds: 2.7,
         controlButton: true,
         floatingButton: true,
@@ -58,6 +61,8 @@
         idleHideUi: true
     };
     var VIEWS = ['visualizer', 'lyrics'];
+    var CYCLE_MODES = ['seconds', 'track'];
+    var MAX_CYCLES_PER_TRACK = 20;
     var LYRICS_SIZES = ['small', 'medium', 'large'];
     var NAME_FLASH_MS = 3000;
     var STOP_GRACE_MS = 1500;
@@ -80,12 +85,15 @@
             }
             if (!parsed || typeof parsed !== 'object') { parsed = {}; }
             var cycle = Number(parsed.cycleSeconds);
+            var perTrack = Number(parsed.cyclesPerTrack);
             var blend = Number(parsed.blendSeconds);
             var idle = Number(parsed.idleMinutes);
             var flag = function (name) { return typeof parsed[name] === 'boolean' ? parsed[name] : DEFAULTS[name]; };
             return {
                 desktopWebAudio: flag('desktopWebAudio'),
+                cycleMode: pickOne(parsed.cycleMode, CYCLE_MODES, DEFAULTS.cycleMode),
                 cycleSeconds: isFinite(cycle) && cycle >= 0 ? cycle : DEFAULTS.cycleSeconds,
+                cyclesPerTrack: isFinite(perTrack) ? Math.min(MAX_CYCLES_PER_TRACK, Math.max(1, Math.round(perTrack))) : DEFAULTS.cyclesPerTrack,
                 blendSeconds: isFinite(blend) && blend >= 0 ? blend : DEFAULTS.blendSeconds,
                 controlButton: flag('controlButton'),
                 floatingButton: flag('floatingButton'),
@@ -313,6 +321,30 @@
             if (!cfg || !cfg.idleVisualizer || !s) { return false; }
             if (s.open || s.opening || s.unsupported || !s.playing || s.hidden) { return false; }
             return s.idleMs >= cfg.idleMinutes * 60000;
+        },
+
+        /**
+         * Whether an open visualizer should minimize its UI now: the setting is on, music is playing, the UI
+         * is showing, and nothing was pressed for the idle minutes. Covers a visualizer opened by hand; the
+         * idle visualizer opens minimized already.
+         */
+        shouldIdleHide: function (cfg, s) {
+            if (!cfg || !cfg.idleHideUi || !s) { return false; }
+            if (!s.open || s.uiHidden || !s.playing) { return false; }
+            return s.idleMs >= cfg.idleMinutes * 60000;
+        },
+
+        /**
+         * Which part of the track is playing when presets change `perTrack` times per song: the track and
+         * the index of its equal slice ("<track>#<slice>"), or null while the track or its length is not
+         * known yet (between tracks), so that gap never counts as a change. A new key means a new preset:
+         * the next track, or the next slice of this one.
+         */
+        trackSlice: function (track, currentTime, duration, perTrack) {
+            if (!track || !(duration > 0) || !isFinite(duration) || !(currentTime >= 0)) { return null; }
+            var n = Math.max(1, Math.floor(perTrack) || 1);
+            var slice = Math.min(n - 1, Math.floor(currentTime / (duration / n)));
+            return track + '#' + slice;
         },
 
         /**
@@ -559,6 +591,7 @@
         lyrics: { itemId: null, data: null, index: -2, elements: [] },
         raf: 0,
         cycleTimer: 0,
+        sliceKey: null,         // trackSlice at the last per-song preset change; null until seen after opening
         flashTimer: 0,
         stopTimer: 0,
         libs: null,             // Promise for the bundles
@@ -1129,7 +1162,7 @@
     function restartCycle() {
         clearInterval(state.cycleTimer);
         state.cycleTimer = 0;
-        if (config.cycleSeconds > 0 && state.open) {
+        if (config.cycleMode === 'seconds' && config.cycleSeconds > 0 && state.open) {
             state.cycleTimer = setInterval(function () {
                 loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, 1));
             }, config.cycleSeconds * 1000);
@@ -1141,7 +1174,21 @@
         try { state.visualizer.render(); } catch (e) { console.error('[Jellybutter] render failed', e); close(); return; }
         if (state.lyricsOn) { updateLyrics(false); }
         if (state.ownBar) { updateTvBar(); }
+        if (config.cycleMode === 'track') { cycleByTrack(); }
         state.raf = requestAnimationFrame(render);
+    }
+
+    /**
+     * Per-song cycling, checked every frame: a new preset when the track, or its slice, changes. The key
+     * seen at open is only recorded, since opening already loaded a preset.
+     */
+    function cycleByTrack() {
+        var audio = state.audio;
+        var key = audio ? JellybutterCore.trackSlice(audio.currentSrc, audio.currentTime, audio.duration, config.cyclesPerTrack) : null;
+        if (key === null || key === state.sliceKey) { return; }
+        var first = state.sliceKey === null;
+        state.sliceKey = key;
+        if (!first) { loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, 1)); }
     }
 
     // ---- Lyrics --------------------------------------------------------------------------------------------
@@ -1566,6 +1613,7 @@
         state.raf = 0;
         clearInterval(state.cycleTimer);
         state.cycleTimer = 0;
+        state.sliceKey = null;
         ui.overlay.classList.remove('jellybutter-open');
         document.documentElement.classList.remove('jellybutter-open');
         ui.toggle.setAttribute('aria-pressed', 'false');
@@ -1652,11 +1700,16 @@
     }
 
     function checkIdle() {
+        var playing = JellybutterCore.isPlaying(state.audio);
+        if (JellybutterCore.shouldIdleHide(config, { open: state.open, uiHidden: state.uiHidden, playing: playing, idleMs: Date.now() - lastInput })) {
+            setUiHidden(true);
+            return;
+        }
         var due = JellybutterCore.shouldIdleOpen(config, {
             open: state.open,
             opening: opening,
             unsupported: state.unsupported,
-            playing: JellybutterCore.isPlaying(state.audio),
+            playing: playing,
             hidden: document.hidden,
             idleMs: Date.now() - lastInput
         });

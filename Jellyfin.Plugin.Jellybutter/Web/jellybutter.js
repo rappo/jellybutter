@@ -111,6 +111,12 @@
             });
         },
 
+        /** A Jellyfin Desktop plugin list with `name` added once; anything that is not a list passes through. */
+        addNativePlugin: function (plugins, name) {
+            if (!Array.isArray(plugins) || plugins.indexOf(name) >= 0) { return plugins; }
+            return plugins.concat([name]);
+        },
+
         /**
          * The Jellyfin Desktop device-profile fix-up. The shell's profile describes mpv (every container,
          * an audio transcoding entry with no container or context), which is wrong for the web player on
@@ -258,6 +264,16 @@
             // Remotes that send only a key code: 461 and 10009 are webOS and Tizen's Back.
             var byCode = { 37: 'left', 38: 'up', 39: 'right', 40: 'down', 13: 'select', 27: 'back', 461: 'back', 10009: 'back' };
             return Object.prototype.hasOwnProperty.call(byCode, keyCode) ? byCode[keyCode] : null;
+        },
+
+        /**
+         * The navigation one of jellyfin-web's input commands means, or null. Jellyfin Desktop sends its
+         * controllers, remotes and (in its TV mode) keyboard as commands rather than key events: the D-pad as
+         * up/down/left/right, A as select, B as back.
+         */
+        navCommandFor: function (command) {
+            var map = { up: 'up', down: 'down', left: 'left', right: 'right', select: 'select', back: 'back' };
+            return typeof command === 'string' && Object.prototype.hasOwnProperty.call(map, command) ? map[command] : null;
         },
 
         /**
@@ -479,6 +495,38 @@
         console.info('[Jellybutter] Jellyfin Desktop: music will play through the web player so the visualizer can hear it.');
     })();
 
+    // Jellyfin Desktop turns controller, remote and TV-mode keyboard presses into jellyfin-web input
+    // commands (inputManager.handleCommand), never key events, and jellyfin-web dispatches a command as a
+    // cancelable "command" DOM event only while something registered through inputManager.on. Nothing global
+    // exposes inputManager, but jellyfin-web hands it to every plugin the shell lists, so the visualizer
+    // lists one of its own: it registers, and onCommand then sees each command ahead of the page.
+    (function addInputPlugin() {
+        var shell = window.NativeShell;
+        var name = 'jellybutterInputPlugin';
+        if (!shell || typeof shell.getPlugins !== 'function' || window[name]) { return; }
+        function JellybutterInputPlugin(deps) {
+            this.name = 'Jellybutter Input';
+            this.type = 'input';
+            this.id = name;
+            var inputManager = deps && deps.inputManager;
+            if (inputManager && typeof inputManager.on === 'function') {
+                inputManager.on(window, noop);
+                window.addEventListener('command', onCommand, true);
+                console.info('[Jellybutter] Jellyfin Desktop: controller and remote commands reach the visualizer.');
+            }
+        }
+        // jellyfin-web loads a listed name as window[name], a function returning the plugin class.
+        window[name] = function () { return JellybutterInputPlugin; };
+        var originalPlugins = shell.getPlugins;
+        shell.getPlugins = function () {
+            var list = originalPlugins.apply(this, arguments);
+            if (list && typeof list.then === 'function') {
+                return list.then(function (resolved) { return JellybutterCore.addNativePlugin(resolved, name); });
+            }
+            return JellybutterCore.addNativePlugin(list, name);
+        };
+    })();
+
     // Media Session action -> handler, as jellyfin-web registers them (play, pause, previoustrack,
     // nexttrack, seekbackward, seekforward, ...): each calls its playback manager, which has no global
     // handle. Recorded by a wrap installed now, before jellyfin-web's deferred bundles register them; the
@@ -608,7 +656,10 @@
             '.jellybutter-tvbar-fill{height:100%;background:#00a4dc;transform-origin:0 50%;transform:scaleX(0)}',
             '.jellybutter-tvbar-art{width:3.6em;height:3.6em;object-fit:cover;border-radius:.3em;flex:none}',
             '.jellybutter-tvbar-art[hidden]{display:none}',
-            '.jellybutter-tvbar-text,.jellybutter-tvbar-time{flex:1 1 0;min-width:0}',
+            // Equal side columns, so the buttons sit at the center of the screen, under the lyrics.
+            '.jellybutter-tvbar-info,.jellybutter-tvbar-time{flex:1 1 0;min-width:0}',
+            '.jellybutter-tvbar-info{display:flex;align-items:center;gap:1.2em}',
+            '.jellybutter-tvbar-text{flex:1 1 auto;min-width:0}',
             '.jellybutter-tvbar-title,.jellybutter-tvbar-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
             '.jellybutter-tvbar-title{font-weight:600;font-size:1.05em}',
             '.jellybutter-tvbar-sub{margin-top:.2em;font-size:.85em;color:rgba(255,255,255,.6)}',
@@ -734,6 +785,10 @@
         ui.tvSub.className = 'jellybutter-tvbar-sub';
         text.appendChild(ui.tvTitle);
         text.appendChild(ui.tvSub);
+        var info = document.createElement('div');
+        info.className = 'jellybutter-tvbar-info';
+        info.appendChild(ui.tvArt);
+        info.appendChild(text);
         var buttons = document.createElement('div');
         buttons.className = 'jellybutter-tvbar-buttons';
         ui.tvPrev = button('jellybutter-ctrl', 'Previous track', ICONS.trackPrev, function () { mediaAction('previoustrack'); });
@@ -744,7 +799,7 @@
         [ui.tvPrev, ui.tvRewind, ui.tvPlay, ui.tvForward, ui.tvNext].forEach(function (b) { buttons.appendChild(b); });
         ui.tvTime = document.createElement('div');
         ui.tvTime.className = 'jellybutter-tvbar-time';
-        [progress, ui.tvArt, text, buttons, ui.tvTime].forEach(function (el) { ui.tvBar.appendChild(el); });
+        [progress, info, buttons, ui.tvTime].forEach(function (el) { ui.tvBar.appendChild(el); });
         return ui.tvBar;
     }
 
@@ -1546,22 +1601,34 @@
         if (state.open) { close(); } else { open(); }
     }
 
+    /** Acts on a navigation from a key or a command when the visualizer owns it; false leaves it to the page. */
+    function takeNav(nav) {
+        if (!nav || !ui.overlay) { return false; }
+        if (state.open) { onNav(nav); return true; }
+        return (nav === 'left' || nav === 'right') && rowArrow(nav);
+    }
+
+    /** jellyfin-web's input commands (see addInputPlugin): cancelled, the page's handling never runs. */
+    function onCommand(e) {
+        noteInput();
+        if (e.defaultPrevented) { return; }
+        var t = e.target;
+        if (t && JellybutterCore.isTypingTarget(t.tagName, t.isContentEditable)) { return; }
+        if (takeNav(JellybutterCore.navCommandFor(e.detail && e.detail.command))) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    }
+
     function onKeyDown(e) {
         if (e.defaultPrevented) { return; }
         var t = e.target;
         if (t && JellybutterCore.isTypingTarget(t.tagName, t.isContentEditable)) { return; }
-        var nav = JellybutterCore.navKeyFor(e.key, e.keyCode, e);
-        if (!state.open && (nav === 'left' || nav === 'right') && rowArrow(nav)) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            return;
-        }
-        if (state.open && nav) {
+        if (takeNav(JellybutterCore.navKeyFor(e.key, e.keyCode, e))) {
             // Prevented, so neither jellyfin-web's navigation, the browser's own activation of a focused
             // button, nor jellyfin-web's click on releasing gamepad A acts on it a second time.
             e.preventDefault();
             e.stopImmediatePropagation();
-            onNav(nav);
             return;
         }
         var action = JellybutterCore.hotkeyFor(e.key, state.open, state.trackLoaded, e);
@@ -1600,7 +1667,8 @@
     }
 
     function startIdle() {
-        // Gamepads reach the page as key events (jellyfin-web's gamepad translation, or Steam Input).
+        // Gamepads reach the page as key events (jellyfin-web's gamepad translation, or Steam Input), or on
+        // Jellyfin Desktop as input commands, which onCommand counts.
         ['keydown', 'pointerdown', 'pointermove', 'wheel', 'touchstart'].forEach(function (ev) {
             window.addEventListener(ev, noteInput, { capture: true, passive: true });
         });

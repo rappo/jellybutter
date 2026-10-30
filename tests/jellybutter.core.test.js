@@ -269,6 +269,23 @@ test('navKeyFor: keyboard, remote and jellyfin-web gamepad keys map to the same 
     assert.equal(core.navKeyFor('Enter', 13, { ctrlKey: true }), null);
 });
 
+test('navCommandFor: Jellyfin Desktop input commands map to the same moves as keys', () => {
+    assert.equal(core.navCommandFor('up'), 'up');
+    assert.equal(core.navCommandFor('left'), 'left');
+    assert.equal(core.navCommandFor('select'), 'select');
+    assert.equal(core.navCommandFor('back'), 'back');
+    assert.equal(core.navCommandFor('playpause'), null);    // playback commands stay jellyfin-web's
+    assert.equal(core.navCommandFor('home'), null);
+    assert.equal(core.navCommandFor('hasOwnProperty'), null);
+    assert.equal(core.navCommandFor(undefined), null);
+});
+
+test('addNativePlugin: appends once, passes non-lists through', () => {
+    assert.deepEqual(core.addNativePlugin(['inputPlugin'], 'x'), ['inputPlugin', 'x']);
+    assert.deepEqual(core.addNativePlugin(['x'], 'x'), ['x']);
+    assert.equal(core.addNativePlugin(null, 'x'), null);
+});
+
 test('nextFocusIndex: moves along a row and between rows, -1 at an edge', () => {
     const r = (left, top, w = 40, h = 40) => ({ left, top, right: left + w, bottom: top + h });
     // Controls row at the right above a centered bar row.

@@ -190,6 +190,12 @@ repo.
   button itself. Focus moves by geometry (`nextFocusIndex`) among the overlay's buttons and jellyfin-web's
   bar buttons. The controls fade 2.5 s after the last key even while one holds focus; the first key
   after that only wakes them.
+- **Jellyfin Desktop's controllers arrive as commands, not keys.** Its SDL controllers, remotes and
+  TV-mode keyboard go through `inputManager.handleCommand('back' | 'up' | 'select' | ...)`, which
+  dispatches a cancelable `command` event only while something registered through `inputManager.on`.
+  `addInputPlugin` lists a plugin of its own in `NativeShell.getPlugins()` (jellyfin-web constructs each
+  listed plugin with `inputManager`), registers, and `onCommand` handles navigation commands ahead of the
+  page in the capture phase (`navCommandFor`, then the same `takeNav` as keys). Playback commands pass.
 - **Back hides, then closes.** `setUiHidden(true)` (Back, or the idle visualizer with `idleHideUi`) adds
   `jellybutter-ui-hidden`: controls, bar buttons, bar background, preset name and badge go; the track,
   artwork, time and progress (moved to the bottom edge) stay. jellyfin-web's bar cannot shed its buttons,
@@ -198,8 +204,8 @@ repo.
 - **The idle visualizer never opens into silence.** Without a key press behind it, `open({ idle: true })`
   only proceeds when the element is already tapped (jellyfin-web's own AudioContext) or a context of the
   script's own reaches `running` within a second (`contextCanRun`): routing the element into a context
-  that stays suspended would mute the music. Input is any keydown (gamepads arrive as keys), pointer or
-  wheel event; `checkIdle` runs every 5 s and counts its own attempt as input.
+  that stays suspended would mute the music. Input is any keydown, input command, pointer or wheel
+  event; `checkIdle` runs every 5 s and counts its own attempt as input.
 - **Now Playing row arrows:** while closed, left/right from the button next to the visualizer button (or
   from it) step by row order (`rowStep`); jellyfin-web's geometric choice otherwise drops from Lyrics onto
   the volume control wrapped under the row. Everything else in the row stays jellyfin-web's.
@@ -220,6 +226,10 @@ repo.
 
 ## Lessons
 
+- 2026-10-29: 1.5.0.0's Back-hides-the-UI did nothing from a controller on Jellyfin Desktop, though it
+  passed every keyboard and gamepadtokey check: the desktop app never sends controller input as key
+  events (see "controllers arrive as commands"). Test controller paths on Jellyfin Desktop itself, or
+  emulate `handleCommand` the way the 12.4 bundle does it.
 - 2026-10-29: Adding a field to `ClientSettings` broke the build (CS7036) in tests a search for
   `new ClientSettings(` missed: one constructs it with named arguments, one with a target-typed `new(...)`.
   Search for all three forms when its parameter list changes.

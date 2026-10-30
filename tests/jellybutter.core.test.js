@@ -4,14 +4,22 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const core = require('../Jellyfin.Plugin.Jellybutter/Web/jellybutter.js');
 
-const DEFAULTS = { desktopWebAudio: true, cycleSeconds: 30, blendSeconds: 2.7, controlButton: true, floatingButton: true, nowPlayingBar: true, defaultView: 'visualizer', lyricsSize: 'medium' };
+const DEFAULTS = { desktopWebAudio: true, cycleSeconds: 30, blendSeconds: 2.7, controlButton: true, floatingButton: true, nowPlayingBar: true, defaultView: 'visualizer', lyricsSize: 'medium', idleVisualizer: true, idleMinutes: 2, idleHideUi: true };
 
 test('parseConfig: fills defaults for a missing, malformed or partial attribute', () => {
     assert.deepEqual(core.parseConfig(null), DEFAULTS);
     assert.deepEqual(core.parseConfig('not json'), DEFAULTS);
     assert.deepEqual(core.parseConfig('{"cycleSeconds":0}'), { ...DEFAULTS, cycleSeconds: 0 });
-    assert.deepEqual(core.parseConfig('{"desktopWebAudio":false,"cycleSeconds":45,"blendSeconds":1.5,"controlButton":false,"floatingButton":false,"nowPlayingBar":false,"defaultView":"lyrics","lyricsSize":"large"}'),
-        { desktopWebAudio: false, cycleSeconds: 45, blendSeconds: 1.5, controlButton: false, floatingButton: false, nowPlayingBar: false, defaultView: 'lyrics', lyricsSize: 'large' });
+    assert.deepEqual(core.parseConfig('{"desktopWebAudio":false,"cycleSeconds":45,"blendSeconds":1.5,"controlButton":false,"floatingButton":false,"nowPlayingBar":false,"defaultView":"lyrics","lyricsSize":"large","idleVisualizer":false,"idleMinutes":5,"idleHideUi":false}'),
+        { desktopWebAudio: false, cycleSeconds: 45, blendSeconds: 1.5, controlButton: false, floatingButton: false, nowPlayingBar: false, defaultView: 'lyrics', lyricsSize: 'large', idleVisualizer: false, idleMinutes: 5, idleHideUi: false });
+    // Idle minutes: whole minutes, 1 to 60.
+    assert.equal(core.parseConfig('{"idleMinutes":0}').idleMinutes, 1);
+    assert.equal(core.parseConfig('{"idleMinutes":600}').idleMinutes, 60);
+    assert.equal(core.parseConfig('{"idleMinutes":2.4}').idleMinutes, 2);
+    assert.equal(core.parseConfig('{"idleMinutes":"soon"}').idleMinutes, 2);
+    // A tag from before the idle settings: on, 2 minutes, UI hidden.
+    assert.equal(core.parseConfig('{"controlButton":true}').idleVisualizer, true);
+    assert.equal(core.parseConfig('{"controlButton":true}').idleHideUi, true);
     assert.equal(core.parseConfig('{"cycleSeconds":-5,"blendSeconds":"x"}').cycleSeconds, 30);
     assert.equal(core.parseConfig('{"cycleSeconds":-5,"blendSeconds":"x"}').blendSeconds, 2.7);
     // Unknown choices fall back; casing is forgiven.
@@ -309,4 +317,39 @@ test('isPlaying: only while the element plays, not paused, ended or missing', ()
     assert.equal(core.isPlaying({ paused: true, ended: false }), false);
     assert.equal(core.isPlaying({ paused: false, ended: true }), false);
     assert.equal(core.isPlaying(null), false);
+});
+
+test('shouldIdleOpen: only while music plays in a visible page after the idle minutes, never twice', () => {
+    const cfg = { idleVisualizer: true, idleMinutes: 2 };
+    const s = { open: false, opening: false, unsupported: false, playing: true, hidden: false, idleMs: 120000 };
+    assert.equal(core.shouldIdleOpen(cfg, s), true);
+    assert.equal(core.shouldIdleOpen(cfg, { ...s, idleMs: 119999 }), false);
+    assert.equal(core.shouldIdleOpen(cfg, { ...s, playing: false }), false);       // paused, or a video
+    assert.equal(core.shouldIdleOpen(cfg, { ...s, open: true }), false);
+    assert.equal(core.shouldIdleOpen(cfg, { ...s, opening: true }), false);
+    assert.equal(core.shouldIdleOpen(cfg, { ...s, unsupported: true }), false);
+    assert.equal(core.shouldIdleOpen(cfg, { ...s, hidden: true }), false);         // window in the background
+    assert.equal(core.shouldIdleOpen({ ...cfg, idleVisualizer: false }, s), false);
+    assert.equal(core.shouldIdleOpen({ ...cfg, idleMinutes: 5 }, s), false);
+    assert.equal(core.shouldIdleOpen(null, s), false);
+});
+
+test('rowStep: right from Lyrics reaches the visualizer button; the button steps to its row neighbors', () => {
+    // favorite, lyrics, visualizer (ours, 2), shuffle, repeat
+    assert.equal(core.rowStep(5, 2, 1, 'right'), 2);
+    assert.equal(core.rowStep(5, 2, 3, 'left'), 2);
+    assert.equal(core.rowStep(5, 2, 2, 'right'), 3);
+    assert.equal(core.rowStep(5, 2, 2, 'left'), 1);
+    assert.equal(core.rowStep(5, 2, 0, 'right'), -1);   // not next to ours: jellyfin-web decides
+    assert.equal(core.rowStep(5, 2, 1, 'left'), -1);
+    assert.equal(core.rowStep(5, 2, -1, 'right'), -1);  // focus outside the row
+    assert.equal(core.rowStep(3, 2, 2, 'right'), -1);   // ours last: nothing to its right
+    assert.equal(core.rowStep(5, 2, 1, 'up'), -1);
+});
+
+test('toggleRight: clears an A-Z picker on the right edge, default spot otherwise', () => {
+    assert.equal(core.toggleRight({ left: 1880, width: 24 }, 1920, 12), 52);
+    assert.equal(core.toggleRight({ left: 10, width: 24 }, 1920, 12), null);     // a left-side picker
+    assert.equal(core.toggleRight({ left: 1880, width: 0 }, 1920, 12), null);    // hidden
+    assert.equal(core.toggleRight(null, 1920, 12), null);
 });

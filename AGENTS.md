@@ -190,6 +190,21 @@ repo.
   button itself. Focus moves by geometry (`nextFocusIndex`) among the overlay's buttons and jellyfin-web's
   bar buttons. The controls fade 2.5 s after the last key even while one holds focus; the first key
   after that only wakes them.
+- **Back hides, then closes.** `setUiHidden(true)` (Back, or the idle visualizer with `idleHideUi`) adds
+  `jellybutter-ui-hidden`: controls, bar buttons, bar background, preset name and badge go; the track,
+  artwork, time and progress (moved to the bottom edge) stay. jellyfin-web's bar cannot shed its buttons,
+  so while hidden `applyBar` swaps it for the visualizer's own bar in every layout (`ownBar` vs `webBar`).
+  Any other key or the pointer brings the UI back; a second Back closes.
+- **The idle visualizer never opens into silence.** Without a key press behind it, `open({ idle: true })`
+  only proceeds when the element is already tapped (jellyfin-web's own AudioContext) or a context of the
+  script's own reaches `running` within a second (`contextCanRun`): routing the element into a context
+  that stays suspended would mute the music. Input is any keydown (gamepads arrive as keys), pointer or
+  wheel event; `checkIdle` runs every 5 s and counts its own attempt as input.
+- **Now Playing row arrows:** while closed, left/right from the button next to the visualizer button (or
+  from it) step by row order (`rowStep`); jellyfin-web's geometric choice otherwise drops from Lyrics onto
+  the volume control wrapped under the row. Everything else in the row stays jellyfin-web's.
+- **The floating button clears the A-Z picker** (`.alphaPicker-fixed-right`, fixed along the right edge of
+  list pages): `refreshButtons` moves it left of a visible picker (`toggleRight`).
 - **No page scrollbar while open:** `html.jellybutter-open` sets `overflow: hidden` on the root and body,
   because the root scrollbar paints beside a fixed overlay rather than under it. The scroll position is
   kept and the scrollbar returns on close.

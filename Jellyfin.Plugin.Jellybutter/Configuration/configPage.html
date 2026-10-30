@@ -93,7 +93,32 @@
                             <option value="large">Large</option>
                         </select>
                     </div>
-                    <p>In the player: the visualizer button appears while a track is loaded. Hotkeys: <strong>v</strong> toggle, <strong>l</strong> lyrics, <strong>b</strong> next preset, <strong>n</strong> previous preset, <strong>Escape</strong> close.</p>
+                    <p>In the player: the visualizer button appears while a track is loaded. Hotkeys: <strong>v</strong> toggle, <strong>l</strong> lyrics, <strong>b</strong> next preset, <strong>n</strong> previous preset. <strong>Escape</strong> or Back hides the controls, a second time closes.</p>
+                </div>
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">When idle</h2>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="jellybutterIdleVisualizer" />
+                            <span class="jellybutter-label">Open the visualizer when idle
+                                <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">While music plays and nothing is pressed for the minutes below, the visualizer opens full screen by itself.</span></span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused jellybutter-label" for="jellybutterIdleMinutes">Idle time (minutes)
+                            <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">1 to 60.</span></span>
+                        </label>
+                        <input is="emby-input" type="number" id="jellybutterIdleMinutes" min="1" max="60" step="1" required />
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="jellybutterIdleHideUi" />
+                            <span class="jellybutter-label">Hide the controls when it opens
+                                <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">Only the track, artwork, time and progress stay on screen. Any key brings the controls back.</span></span>
+                            </span>
+                        </label>
+                    </div>
                 </div>
                 <div>
                     <button is="emby-button" type="submit" class="raised button-submit block emby-button">
@@ -120,6 +145,10 @@
                     page.querySelector('#jellybutterNowPlayingBar').checked = config.NowPlayingBar !== false;
                     page.querySelector('#jellybutterDefaultView').value = config.DefaultView === 'lyrics' ? 'lyrics' : 'visualizer';
                     page.querySelector('#jellybutterLyricsSize').value = ['small', 'medium', 'large'].indexOf(config.LyricsSize) >= 0 ? config.LyricsSize : 'medium';
+                    page.querySelector('#jellybutterIdleVisualizer').checked = config.IdleVisualizer !== false;
+                    page.querySelector('#jellybutterIdleMinutes').value = typeof config.IdleMinutes === 'number' ? config.IdleMinutes : 2;
+                    page.querySelector('#jellybutterIdleHideUi').checked = config.IdleHideUi !== false;
+                    syncIdle();
                     Dashboard.hideLoadingMsg();
                 });
                 ApiClient.getJSON(ApiClient.getUrl('Plugins')).then(function (plugins) {
@@ -128,7 +157,15 @@
                 }).catch(function () { /* the version is a nicety */ });
             }
 
+            // The idle options only mean something while the idle visualizer is on.
+            function syncIdle() {
+                var on = page.querySelector('#jellybutterIdleVisualizer').checked;
+                page.querySelector('#jellybutterIdleMinutes').disabled = !on;
+                page.querySelector('#jellybutterIdleHideUi').disabled = !on;
+            }
+
             page.addEventListener('pageshow', load);
+            page.querySelector('#jellybutterIdleVisualizer').addEventListener('change', syncIdle);
 
             // A tip opens toward the middle of the window: left-anchored from the left half, right-anchored
             // from the right half, so a short label near the left edge and a long one near the right edge
@@ -155,6 +192,9 @@
                     config.NowPlayingBar = page.querySelector('#jellybutterNowPlayingBar').checked;
                     config.DefaultView = page.querySelector('#jellybutterDefaultView').value;
                     config.LyricsSize = page.querySelector('#jellybutterLyricsSize').value;
+                    config.IdleVisualizer = page.querySelector('#jellybutterIdleVisualizer').checked;
+                    config.IdleMinutes = Math.max(1, Math.min(60, Math.round(Number(page.querySelector('#jellybutterIdleMinutes').value) || 2)));
+                    config.IdleHideUi = page.querySelector('#jellybutterIdleHideUi').checked;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(Dashboard.processPluginConfigurationUpdateResult);
                 });
                 return false;

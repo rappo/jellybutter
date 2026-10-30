@@ -16,8 +16,9 @@ repository, updated from there; nothing to install on any client.
 
 - A **visualizer button** in the Now Playing controls, between Lyrics and Shuffle, styled like
   jellyfin-web's own buttons. On every other page a round floating button appears at the bottom right
-  while a track is loaded; its bars bounce while music plays. Both are real buttons, so jellyfin-web's
-  arrow-key (D-pad) navigation reaches them; both can be switched off.
+  while a track is loaded; its bars bounce while music plays, and it moves aside for the A-Z picker on
+  list pages. Both are real buttons, so jellyfin-web's arrow-key (D-pad) navigation reaches them (left
+  and right step straight between Lyrics, the visualizer button and Shuffle); both can be switched off.
 - The visualizer opens **full screen**: a random preset to start, a new one every 30 seconds (setting),
   2.7 seconds of blend between presets (setting), and the preset's name shown for 3 seconds on each change.
 - A **lyrics view** lays the track's lyrics over the visualizer, readable over any preset (dark outline,
@@ -36,9 +37,12 @@ repository, updated from there; nothing to install on any client.
 - **D-pad and controller:** while the visualizer is open, the arrow keys, a remote's D-pad, or a gamepad
   (with jellyfin-web's "Enable gamepad" setting, or a Steam Input layout sending arrows, Enter and
   Escape) wake the on-screen controls and move between them and the Now Playing bar's buttons; Enter or A
-  presses, Back, Escape or B closes.
+  presses. Back, Escape or B hides the UI, leaving the track, artwork, time and a progress line along the
+  bottom; pressing it again closes the visualizer.
+- **Idle visualizer:** while music plays and nothing is pressed for 2 minutes (setting), the visualizer
+  opens full screen by itself, with the UI hidden (setting). Any key brings the controls back.
 - **Hotkeys:** `v` toggles the visualizer, `l` toggles lyrics, `b` next preset, `n` previous preset,
-  `Escape` closes. A Steam Input layout that maps paddles to `v`, `b` and `n` drives it from a
+  `Escape` hides the UI, then closes. A Steam Input layout that maps paddles to `v`, `b` and `n` drives it from a
   controller. On-screen buttons for previous, random, next, lyrics and close appear on hover or on any
   key, and fade after a moment.
 - **Jellyfin Desktop:** the desktop client plays music through mpv, which a web page cannot hear. With the
@@ -78,6 +82,9 @@ Dashboard > Plugins > Jellybutter Visualizer.
 | Now Playing bar under the visualizer | on | jellyfin-web's playback bar along the bottom while the visualizer is open (the visualizer's own in the TV layout). |
 | Opens as | Visualizer only | Or "Visualizer with lyrics". `l` switches lyrics on and off either way. |
 | Lyrics text size | Medium | Small, Medium or Large. |
+| Open the visualizer when idle | on | While music plays and nothing is pressed for the idle time, the visualizer opens by itself. |
+| Idle time (minutes) | 2 | 1 to 60. |
+| Hide the controls when it opens | on | The idle visualizer shows only the track, artwork, time and progress until a key is pressed. |
 
 Settings take effect on the next page load of the web client (a reload, or reopening the desktop client).
 

@@ -22,6 +22,9 @@ public class PluginConfiguration : BasePluginConfiguration
         NowPlayingBar = true;
         DefaultView = "visualizer";
         LyricsSize = "medium";
+        IdleVisualizer = true;
+        IdleMinutes = 2;
+        IdleHideUi = true;
     }
 
     /// <summary>
@@ -74,4 +77,21 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Gets or sets the lyrics text size: "small", "medium" or "large".
     /// </summary>
     public string LyricsSize { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the visualizer opens by itself, full screen, when music has been
+    /// playing with no input for <see cref="IdleMinutes"/>.
+    /// </summary>
+    public bool IdleVisualizer { get; set; }
+
+    /// <summary>
+    /// Gets or sets how many minutes without input, while music plays, open the idle visualizer.
+    /// </summary>
+    public int IdleMinutes { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the idle visualizer opens with its controls hidden: no buttons and
+    /// no bar background, only the track, artwork, time and progress.
+    /// </summary>
+    public bool IdleHideUi { get; set; }
 }

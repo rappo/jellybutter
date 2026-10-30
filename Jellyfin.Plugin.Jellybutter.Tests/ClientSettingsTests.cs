@@ -20,9 +20,12 @@ public class ClientSettingsTests
         Assert.True(config.NowPlayingBar);
         Assert.Equal("visualizer", config.DefaultView);
         Assert.Equal("medium", config.LyricsSize);
+        Assert.True(config.IdleVisualizer);
+        Assert.Equal(2, config.IdleMinutes);
+        Assert.True(config.IdleHideUi);
 
         var settings = ClientSettings.FromConfiguration(config);
-        Assert.Equal(new ClientSettings(true, 30, 2.7, true, true, true, "visualizer", "medium"), settings);
+        Assert.Equal(new ClientSettings(true, 30, 2.7, true, true, true, "visualizer", "medium", true, 2, true), settings);
     }
 
     [Theory]
@@ -42,6 +45,24 @@ public class ClientSettingsTests
     [InlineData(null, "medium")]
     public void LyricsSize_IsOneOfTheKnownSizes(string? saved, string expected)
         => Assert.Equal(expected, ClientSettings.FromConfiguration(new PluginConfiguration { LyricsSize = saved! })!.LyricsSize);
+
+    [Theory]
+    [InlineData(2, 2)]
+    [InlineData(0, 1)]
+    [InlineData(-5, 1)]
+    [InlineData(60, 60)]
+    [InlineData(600, 60)]
+    public void IdleMinutes_IsClampedToTheRangeTheScriptAccepts(int saved, int expected)
+        => Assert.Equal(expected, ClientSettings.FromConfiguration(new PluginConfiguration { IdleMinutes = saved })!.IdleMinutes);
+
+    [Fact]
+    public void IdleSwitches_PassThrough()
+    {
+        var settings = ClientSettings.FromConfiguration(new PluginConfiguration { IdleVisualizer = false, IdleHideUi = false })!;
+
+        Assert.False(settings.IdleVisualizer);
+        Assert.False(settings.IdleHideUi);
+    }
 
     [Fact]
     public void ButtonSwitches_PassThrough()
@@ -80,8 +101,8 @@ public class ClientSettingsTests
     [Fact]
     public void ToJson_IsCompactCamelCase_AsTheScriptParsesIt()
     {
-        var json = new ClientSettings(false, 0, 2.7, true, false, true, "lyrics", "large").ToJson();
+        var json = new ClientSettings(false, 0, 2.7, true, false, true, "lyrics", "large", true, 2, true).ToJson();
 
-        Assert.Equal("{\"desktopWebAudio\":false,\"cycleSeconds\":0,\"blendSeconds\":2.7,\"controlButton\":true,\"floatingButton\":false,\"nowPlayingBar\":true,\"defaultView\":\"lyrics\",\"lyricsSize\":\"large\"}", json);
+        Assert.Equal("{\"desktopWebAudio\":false,\"cycleSeconds\":0,\"blendSeconds\":2.7,\"controlButton\":true,\"floatingButton\":false,\"nowPlayingBar\":true,\"defaultView\":\"lyrics\",\"lyricsSize\":\"large\",\"idleVisualizer\":true,\"idleMinutes\":2,\"idleHideUi\":true}", json);
     }
 }

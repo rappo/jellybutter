@@ -18,6 +18,9 @@ namespace Jellyfin.Plugin.Jellybutter.WebUi;
 /// <param name="NowPlayingBar">Whether jellyfin-web's Now Playing bar shows along the bottom of the visualizer.</param>
 /// <param name="DefaultView">The view the visualizer opens in, one of <see cref="Views"/>.</param>
 /// <param name="LyricsSize">The lyrics text size, one of <see cref="LyricsSizes"/>.</param>
+/// <param name="IdleVisualizer">Whether the visualizer opens by itself after idle minutes of playback.</param>
+/// <param name="IdleMinutes">Minutes without input before it does, within <see cref="MinIdleMinutes"/>..<see cref="MaxIdleMinutes"/>.</param>
+/// <param name="IdleHideUi">Whether the idle visualizer opens with its controls hidden.</param>
 public sealed record ClientSettings(
     bool DesktopWebAudio,
     int CycleSeconds,
@@ -26,7 +29,10 @@ public sealed record ClientSettings(
     bool FloatingButton,
     bool NowPlayingBar,
     string DefaultView,
-    string LyricsSize)
+    string LyricsSize,
+    bool IdleVisualizer,
+    int IdleMinutes,
+    bool IdleHideUi)
 {
     /// <summary>
     /// The views the visualizer can open in; the first is the default.
@@ -47,6 +53,16 @@ public sealed record ClientSettings(
     /// The longest blend the script accepts, in seconds.
     /// </summary>
     public const double MaxBlendSeconds = 30;
+
+    /// <summary>
+    /// The shortest idle time the script accepts, in minutes.
+    /// </summary>
+    public const int MinIdleMinutes = 1;
+
+    /// <summary>
+    /// The longest idle time the script accepts, in minutes.
+    /// </summary>
+    public const int MaxIdleMinutes = 60;
 
     private static readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web)
     {
@@ -76,7 +92,10 @@ public sealed record ClientSettings(
             configuration.FloatingButton,
             configuration.NowPlayingBar,
             PickOne(configuration.DefaultView, Views, Views[0]),
-            PickOne(configuration.LyricsSize, LyricsSizes, LyricsSizes[1]));
+            PickOne(configuration.LyricsSize, LyricsSizes, LyricsSizes[1]),
+            configuration.IdleVisualizer,
+            Math.Clamp(configuration.IdleMinutes, MinIdleMinutes, MaxIdleMinutes),
+            configuration.IdleHideUi);
     }
 
     private static string PickOne(string? value, string[] allowed, string fallback)

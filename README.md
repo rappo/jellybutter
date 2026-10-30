@@ -14,43 +14,17 @@ repository, updated from there; nothing to install on any client.
 
 ## What it does
 
-- A **visualizer button** in the Now Playing controls, between Lyrics and Shuffle, styled like
-  jellyfin-web's own buttons. On every other page a round floating button appears at the bottom right
-  while a track is loaded; its bars bounce while music plays, and it moves aside for the A-Z picker on
-  list pages. Both are real buttons, so jellyfin-web's arrow-key (D-pad) navigation reaches them (left
-  and right step straight between Lyrics, the visualizer button and Shuffle); both can be switched off.
-- The visualizer opens **full screen**: a random preset to start, a new one every 30 seconds (setting),
-  2.7 seconds of blend between presets (setting), and the preset's name shown for 3 seconds on each change.
-- A **lyrics view** lays the track's lyrics over the visualizer, readable over any preset (dark outline,
-  drop shadow, accent glow on the current line). Lyrics come from Jellyfin's own Lyrics API, so whatever
-  feeds the web client's lyrics page (sidecar `.lrc`/`.txt` files, the LrcLib plugin) feeds this too.
-  Synced lyrics follow the music: the current line is large and centered, past lines dimmed above,
-  upcoming lines below, with a smooth move on every change. Unsynced lyrics (plain text, no timestamps)
-  cannot follow the music, so they sit still, whole, sized down or set in columns to fit the screen, with
-  an "Unsynced lyrics" badge in the corner. A
-  `.lrc` file with `[mm:ss.xx]` times gives synced lyrics. A setting picks whether the visualizer
-  opens with or without lyrics; `l` or the Lyrics button toggles them while it is open.
-- The web client's own **Now Playing bar** (artwork, track, artist, playback controls, volume) stays along
-  the bottom of the visualizer, live, from whichever page it was opened (setting, on by default). The TV
-  layout has no Now Playing bar of its own, so there the visualizer shows one: artwork, track, artist and
-  album, previous, rewind, play/pause, fast forward and next, and the time.
-- **D-pad and controller:** while the visualizer is open, the arrow keys, a remote's D-pad, or a gamepad
-  (with jellyfin-web's "Enable gamepad" setting, or a Steam Input layout sending arrows, Enter and
-  Escape) wake the on-screen controls and move between them and the Now Playing bar's buttons; Enter or A
-  presses. Back, Escape or B hides the UI, leaving the track, artwork, time and a progress line along the
-  bottom; pressing it again closes the visualizer.
-- **Idle visualizer:** while music plays and nothing is pressed for 2 minutes (setting), the visualizer
-  opens full screen by itself, with the UI hidden (setting). Any key brings the controls back.
-- **Hotkeys:** `v` toggles the visualizer, `l` toggles lyrics, `b` next preset, `n` previous preset,
-  `Escape` hides the UI, then closes. A Steam Input layout that maps paddles to `v`, `b` and `n` drives it from a
-  controller. On-screen buttons for previous, random, next, lyrics and close appear on hover or on any
-  key, and fade after a moment.
-- **Jellyfin Desktop:** the desktop client plays music through mpv, which a web page cannot hear. With the
-  "Play music in the web player on Jellyfin Desktop" setting (on by default) the plugin hides the mpv
-  audio player from the web client, so music plays through the web player and the visualizer hears it.
-  Video stays on mpv. Audio output is unchanged: the web view plays to the system's default sink.
-- **Self-contained:** the plugin serves the Butterchurn engine and presets itself. Nothing is loaded from
-  a CDN, so it works on a LAN with no internet.
+- **Full-screen MilkDrop visualizer** with auto-cycling presets, opened from a button in Now Playing or a
+  floating button anywhere else.
+- **Lyrics over the visualizer:** synced lyrics follow the music; plain lyrics show still, fitted to the
+  screen.
+- **Now Playing bar** under the visualizer: track, artwork, controls and progress.
+- **TV and controller friendly:** D-pad, remote or gamepad. Back hides the UI, a second Back closes.
+- **Idle mode:** opens by itself after 2 minutes of music with no input.
+- **Hotkeys:** `v` visualizer, `l` lyrics, `b`/`n` next/previous preset.
+- **Jellyfin Desktop:** routes music through the web player so the visualizer can hear it; video stays on
+  mpv.
+- **Self-contained:** no CDN, works offline.
 
 ## Install
 

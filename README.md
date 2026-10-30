@@ -14,14 +14,15 @@ repository, updated from there; nothing to install on any client.
 
 ## What it does
 
-- **Full-screen MilkDrop visualizer** with presets that change on a timer or per song, opened from a button in Now Playing or a
+- **Full-screen MilkDrop visualizer** with 395 presets that change on a timer or per song, opened from a button in Now Playing or a
   floating button anywhere else.
 - **Lyrics over the visualizer:** synced lyrics follow the music; plain lyrics show still, fitted to the
   screen.
 - **Now Playing bar** under the visualizer: track, artwork, controls and progress.
 - **TV and controller friendly:** D-pad, remote or gamepad. Back hides the UI, a second Back closes.
 - **Idle mode:** opens by itself after 2 minutes of music with no input, and minimizes its UI when left alone.
-- **Hotkeys:** `v` visualizer, `l` lyrics, `b`/`n` next/previous preset.
+- **Like or block presets** while watching: liked ones come up more often, blocked ones never.
+- **Hotkeys:** `v` visualizer, `l` lyrics, `b`/`n` next/previous preset, `h` like, `x` block.
 - **Jellyfin Desktop:** routes music through the web player so the visualizer can hear it; video stays on
   mpv.
 - **Self-contained:** no CDN, works offline.
@@ -60,9 +61,14 @@ Dashboard > Plugins > Jellybutter Visualizer.
 | Lyrics text size | Medium | Small, Medium or Large. |
 | Open the visualizer when idle | on | While music plays and nothing is pressed for the idle time, the visualizer opens by itself. |
 | Idle time (minutes) | 2 | 1 to 60. |
+| Liked presets come up (times as often) | 3 | 2 to 10. Blocked presets never come up. |
+| Show only liked presets | off | Every unblocked preset comes up while nothing is liked yet. |
+| Separate likes and blocks for each user | off | Off, everyone shares one list and the latest vote counts. Votes always record who cast them, so switching applies to past votes. |
+| Extra, Extra 2, MD1 preset packs | on | The packs beyond the 100 built-in presets (146, 122 and 87 more). |
 | Minimize the UI when idle | on | Only the track, artwork, time and progress stay until a key is pressed: the idle visualizer opens that way, and one opened by hand minimizes after the idle time. |
 
 Settings take effect on the next page load of the web client (a reload, or reopening the desktop client).
+The same page lists every like and block, who cast it and when, with a way to clear them.
 
 ## How it works
 

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Jellyfin.Plugin.Jellybutter.Configuration;
@@ -23,6 +25,9 @@ namespace Jellyfin.Plugin.Jellybutter.WebUi;
 /// <param name="IdleHideUi">Whether the UI minimizes when idle (the idle visualizer opens minimized).</param>
 /// <param name="CycleMode">How presets change by themselves, one of <see cref="CycleModes"/>.</param>
 /// <param name="CyclesPerTrack">Preset changes per song in the "track" mode, within 1..<see cref="MaxCyclesPerTrack"/>.</param>
+/// <param name="LikeWeight">How many times as likely a liked preset is, within <see cref="MinLikeWeight"/>..<see cref="MaxLikeWeight"/>.</param>
+/// <param name="LikedOnly">Whether only liked presets come up.</param>
+/// <param name="PresetPacks">The optional preset packs in use, of <see cref="Packs"/>.</param>
 public sealed record ClientSettings(
     bool DesktopWebAudio,
     int CycleSeconds,
@@ -36,8 +41,26 @@ public sealed record ClientSettings(
     int IdleMinutes,
     bool IdleHideUi,
     string CycleMode,
-    int CyclesPerTrack)
+    int CyclesPerTrack,
+    int LikeWeight,
+    bool LikedOnly,
+    IReadOnlyList<string> PresetPacks)
 {
+    /// <summary>
+    /// The optional preset packs, by the names the asset endpoint and the script use.
+    /// </summary>
+    public static readonly string[] Packs = ["extra", "extra2", "md1"];
+
+    /// <summary>
+    /// The smallest like weight the script accepts.
+    /// </summary>
+    public const int MinLikeWeight = 2;
+
+    /// <summary>
+    /// The largest like weight the script accepts.
+    /// </summary>
+    public const int MaxLikeWeight = 10;
+
     /// <summary>
     /// The ways presets change by themselves; the first is the default.
     /// </summary>
@@ -111,7 +134,16 @@ public sealed record ClientSettings(
             Math.Clamp(configuration.IdleMinutes, MinIdleMinutes, MaxIdleMinutes),
             configuration.IdleHideUi,
             PickOne(configuration.CycleMode, CycleModes, CycleModes[0]),
-            Math.Clamp(configuration.CyclesPerTrack, 1, MaxCyclesPerTrack));
+            Math.Clamp(configuration.CyclesPerTrack, 1, MaxCyclesPerTrack),
+            Math.Clamp(configuration.LikeWeight, MinLikeWeight, MaxLikeWeight),
+            configuration.LikedOnly,
+            PacksOf(configuration));
+    }
+
+    private static string[] PacksOf(PluginConfiguration configuration)
+    {
+        var on = new[] { configuration.PackExtra, configuration.PackExtra2, configuration.PackMd1 };
+        return Packs.Where((_, i) => on[i]).ToArray();
     }
 
     private static string PickOne(string? value, string[] allowed, string fallback)

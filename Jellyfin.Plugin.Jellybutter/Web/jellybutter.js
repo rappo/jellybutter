@@ -29,7 +29,8 @@
  *     The TV layout has no such bar (jellyfin-web never builds it there), so there the visualizer shows its
  *     own: title, artist and artwork from the Media Session metadata jellyfin-web publishes, and transport
  *     buttons calling the Media Session handlers it registers (captured at load, like the source nodes).
- *   - Hotkeys: v toggles the visualizer, l toggles lyrics, b next preset, n previous preset, Escape closes.
+ *   - Hotkeys: v toggles the visualizer, l toggles lyrics, b next preset, n previous preset, h likes and x
+ *     blocks the preset showing, Escape closes.
  *     Ignored while typing in a field.
  *   - D-pad: while open, arrows (keyboard, remote, or a gamepad through jellyfin-web's gamepad setting) wake
  *     the controls and move between them and the Now Playing bar's buttons, Enter or A presses. Back (B,
@@ -38,6 +39,9 @@
  *   - Idle visualizer: while music plays and nothing is pressed for the set minutes, it opens by itself,
  *     with the UI hidden by default; opened by hand, it hides the UI after the same idle time.
  *   - Presets cycle every few seconds, or a set number of times per song (1: a new preset with each track).
+ *     Each change is a weighted draw from the packs in use: blocked presets never, liked ones more often
+ *     (or only liked ones). Likes and blocks are saved on the server (Jellybutter/Presets/Votes); a block
+ *     moves on to a preset nobody voted on, so blocking browses new ones.
  *
  * The pure helpers live on JellybutterCore and are exported for the node:test suite under tests/; the DOM
  * part only runs in a browser.
@@ -58,11 +62,18 @@
         lyricsSize: 'medium',
         idleVisualizer: true,
         idleMinutes: 2,
-        idleHideUi: true
+        idleHideUi: true,
+        likeWeight: 3,
+        likedOnly: false,
+        presetPacks: ['extra', 'extra2', 'md1']
     };
     var VIEWS = ['visualizer', 'lyrics'];
     var CYCLE_MODES = ['seconds', 'track'];
     var MAX_CYCLES_PER_TRACK = 20;
+    // The optional preset packs: the name the settings use -> the global their UMD bundle defines.
+    var PRESET_PACKS = { extra: 'butterchurnPresetsExtra', extra2: 'butterchurnPresetsExtra2', md1: 'butterchurnPresetsMD1' };
+    var RECENT_PRESETS = 10;
+    var HISTORY_LIMIT = 100;
     var LYRICS_SIZES = ['small', 'medium', 'large'];
     var NAME_FLASH_MS = 3000;
     var STOP_GRACE_MS = 1500;
@@ -88,6 +99,10 @@
             var perTrack = Number(parsed.cyclesPerTrack);
             var blend = Number(parsed.blendSeconds);
             var idle = Number(parsed.idleMinutes);
+            var weight = Number(parsed.likeWeight);
+            var packs = Array.isArray(parsed.presetPacks)
+                ? Object.keys(PRESET_PACKS).filter(function (p) { return parsed.presetPacks.indexOf(p) >= 0; })
+                : DEFAULTS.presetPacks.slice();
             var flag = function (name) { return typeof parsed[name] === 'boolean' ? parsed[name] : DEFAULTS[name]; };
             return {
                 desktopWebAudio: flag('desktopWebAudio'),
@@ -102,7 +117,10 @@
                 lyricsSize: pickOne(parsed.lyricsSize, LYRICS_SIZES, DEFAULTS.lyricsSize),
                 idleVisualizer: flag('idleVisualizer'),
                 idleMinutes: isFinite(idle) ? Math.min(60, Math.max(1, Math.round(idle))) : DEFAULTS.idleMinutes,
-                idleHideUi: flag('idleHideUi')
+                idleHideUi: flag('idleHideUi'),
+                likeWeight: isFinite(weight) ? Math.min(10, Math.max(2, Math.round(weight))) : DEFAULTS.likeWeight,
+                likedOnly: flag('likedOnly'),
+                presetPacks: packs
             };
         },
 
@@ -148,20 +166,58 @@
             return merged;
         },
 
-        /** Wraps an index around the preset list. */
-        stepIndex: function (index, count, delta) {
-            if (!count) { return 0; }
-            return ((index + delta) % count + count) % count;
+        /** The global names of the preset bundles to load: the base pack, then the optional ones chosen. */
+        presetGlobals: function (packs) {
+            return ['butterchurnPresets'].concat((packs || []).filter(function (p) {
+                return Object.prototype.hasOwnProperty.call(PRESET_PACKS, p);
+            }).map(function (p) { return PRESET_PACKS[p]; }));
         },
 
-        /** A random index, different from the current one when there is a choice. */
-        randomIndex: function (count, current, random) {
-            if (!count) { return 0; }
+        /** The server's vote summary ({ likes: [], blocks: [] }) as two lookup sets; null gives empty ones. */
+        voteSets: function (summary) {
+            var set = function (list) {
+                var out = Object.create(null);
+                (Array.isArray(list) ? list : []).forEach(function (n) { if (typeof n === 'string') { out[n] = true; } });
+                return out;
+            };
+            return { likes: set(summary && summary.likes), blocks: set(summary && summary.blocks) };
+        },
+
+        /**
+         * The next preset to show, or null when every one is blocked. Blocked presets never come up. Normally
+         * a weighted draw: a liked preset is `likeWeight` times as likely as any other; with `likedOnly`,
+         * only liked ones (any unblocked one while none is liked). With `unrated` (after a block), only
+         * presets nobody voted on, preferring ones not `seen` yet, for browsing new ones. The `recent` ones
+         * are avoided whenever anything else is left.
+         */
+        pickPreset: function (names, votes, options, random) {
+            var o = options || {};
+            var likes = (votes && votes.likes) || {};
+            var blocks = (votes && votes.blocks) || {};
             var r = typeof random === 'function' ? random : Math.random;
-            if (count === 1) { return 0; }
-            if (!(current >= 0 && current < count)) { return Math.floor(r() * count); }
-            var pick = Math.floor(r() * (count - 1));
-            return pick >= current ? pick + 1 : pick;
+            var narrow = function (list, keep) {
+                var kept = list.filter(keep);
+                return kept.length ? kept : list;
+            };
+            var pool = (names || []).filter(function (n) { return !blocks[n]; });
+            if (!pool.length) { return null; }
+            if (o.unrated) {
+                pool = narrow(pool, function (n) { return !likes[n]; });
+                if (o.seen) { pool = narrow(pool, function (n) { return !o.seen[n]; }); }
+            } else if (o.likedOnly) {
+                pool = narrow(pool, function (n) { return likes[n]; });
+            }
+            var recent = o.recent || [];
+            pool = narrow(pool, function (n) { return recent.indexOf(n) < 0; });
+            var weighted = !o.unrated && !o.likedOnly;
+            var weight = function (n) { return weighted && likes[n] ? Math.max(1, o.likeWeight || 1) : 1; };
+            var total = pool.reduce(function (sum, n) { return sum + weight(n); }, 0);
+            var at = r() * total;
+            for (var i = 0; i < pool.length; i++) {
+                at -= weight(pool[i]);
+                if (at < 0) { return pool[i]; }
+            }
+            return pool[pool.length - 1];
         },
 
         /** Whether a key event's target is a place where typing happens, so hotkeys stay out of the way. */
@@ -171,8 +227,8 @@
         },
 
         /**
-         * Maps a key to an action given the current state: 'toggle', 'lyrics', 'next', 'prev', 'close' or
-         * null. The toggle only works while a track is loaded (there is nothing to visualize otherwise);
+         * Maps a key to an action given the current state: 'toggle', 'lyrics', 'next', 'prev', 'like',
+         * 'block', 'close' or null. The toggle only works while a track is loaded (there is nothing to visualize otherwise);
          * the others only while the visualizer is open. Modifier combinations are left to the browser.
          */
         hotkeyFor: function (key, open, trackLoaded, modifiers) {
@@ -184,6 +240,8 @@
             if (k === 'b') { return 'next'; }
             if (k === 'n') { return 'prev'; }
             if (k === 'l') { return 'lyrics'; }
+            if (k === 'h') { return 'like'; }
+            if (k === 'x') { return 'block'; }
             return null;
         },
 
@@ -584,8 +642,13 @@
         visualizer: null,
         visualizerContext: null,
         presets: null,          // { [name]: preset }
-        names: [],              // sorted preset names
-        index: 0,
+        names: [],              // sorted preset names, every pack in use
+        current: null,          // the preset showing
+        history: [],            // presets shown, oldest first, for Previous; HISTORY_LIMIT at most
+        historyPos: -1,         // where in history the showing preset is
+        seen: Object.create(null), // presets shown this page load, so browsing after a block finds new ones
+        votes: { likes: Object.create(null), blocks: Object.create(null) }, // see voteSets
+        voting: false,          // whether votes can be saved (signed in to a server with the endpoint)
         open: false,
         lyricsOn: false,
         lyrics: { itemId: null, data: null, index: -2, elements: [] },
@@ -650,6 +713,9 @@
             '.jellybutter-ctrl:hover,.jellybutter-ctrl:focus{background:rgba(0,164,220,.85);color:#fff;outline:none}',
             '.jellybutter-ctrl:focus-visible{box-shadow:0 0 0 .2em #fff}',
             '.jellybutter-ctrl[aria-pressed="true"]{background:rgba(0,164,220,.55);color:#fff}',
+            '.jellybutter-like[aria-pressed="true"] svg{fill:currentColor}',
+            '.jellybutter-block[aria-pressed="true"]{background:rgba(200,40,40,.6)}',
+            '.jellybutter-ctrl[hidden]{display:none}',
             '.jellybutter-ctrl svg{width:1.2em;height:1.2em}',
             '.jellybutter-ctrl[hidden]{display:none}',
             '.jellybutter-ctrl.jellybutter-ctrl-main{width:3em;height:3em}',
@@ -720,7 +786,8 @@
         bars: '<line x1="4" y1="12" x2="4" y2="20"/><line x1="8" y1="5" x2="8" y2="20"/><line x1="12" y1="2" x2="12" y2="20"/><line x1="16" y1="8" x2="16" y2="20"/><line x1="20" y1="14" x2="20" y2="20"/>',
         prev: '<polyline points="15 18 9 12 15 6"/>',
         next: '<polyline points="9 18 15 12 9 6"/>',
-        random: '<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>',
+        like: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
+        block: '<circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/>',
         lyrics: '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="11" x2="16" y2="11"/><line x1="4" y1="16" x2="18" y2="16"/><line x1="4" y1="21" x2="12" y2="21"/>',
         close: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
         play: '<polygon points="6 4 20 12 6 20 6 4"/>',
@@ -769,15 +836,19 @@
         ui.toast.setAttribute('aria-live', 'polite');
         ui.controls = document.createElement('div');
         ui.controls.className = 'jellybutter-controls';
-        ui.prev = button('jellybutter-ctrl', 'Previous preset (n)', ICONS.prev, function () { loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, -1)); });
-        ui.random = button('jellybutter-ctrl', 'Random preset', ICONS.random, function () { loadPreset(JellybutterCore.randomIndex(state.names.length, state.index)); });
-        ui.next = button('jellybutter-ctrl', 'Next preset (b)', ICONS.next, function () { loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, 1)); });
+        ui.prev = button('jellybutter-ctrl', 'Previous preset (n)', ICONS.prev, prevPreset);
+        ui.next = button('jellybutter-ctrl', 'Next preset (b)', ICONS.next, function () { nextPreset(); });
+        ui.like = button('jellybutter-ctrl jellybutter-like', 'Like this preset (h)', ICONS.like, function () { castVote('like'); });
+        ui.like.setAttribute('aria-pressed', 'false');
+        ui.block = button('jellybutter-ctrl jellybutter-block', 'Block this preset (x)', ICONS.block, function () { castVote('block'); });
+        ui.block.setAttribute('aria-pressed', 'false');
         ui.lyricsBtn = button('jellybutter-ctrl', 'Lyrics (l)', ICONS.lyrics, function () { setLyrics(!state.lyricsOn); });
         ui.lyricsBtn.setAttribute('aria-pressed', 'false');
         ui.close = button('jellybutter-ctrl', 'Close visualizer (Escape)', ICONS.close, close);
         ui.controls.appendChild(ui.prev);
-        ui.controls.appendChild(ui.random);
         ui.controls.appendChild(ui.next);
+        ui.controls.appendChild(ui.like);
+        ui.controls.appendChild(ui.block);
         ui.controls.appendChild(ui.lyricsBtn);
         ui.controls.appendChild(ui.close);
         ui.overlay.appendChild(ui.canvas);
@@ -1075,25 +1146,117 @@
 
     function ensureLibs() {
         if (!state.libs) {
-            state.libs = Promise.all([
-                window.butterchurn ? Promise.resolve() : loadScript(JellybutterCore.assetUrl(assetBase, 'butterchurn.js', version)),
-                window.butterchurnPresets ? Promise.resolve() : loadScript(JellybutterCore.assetUrl(assetBase, 'butterchurn-presets.js', version))
-            ]).then(function () {
-                // The UMD bundles expose the ES module namespace: the API is its default export.
-                var engine = window.butterchurn && (window.butterchurn.default || window.butterchurn);
-                var presets = window.butterchurnPresets && (window.butterchurnPresets.default || window.butterchurnPresets);
-                if (!engine || typeof engine.createVisualizer !== 'function' || !presets || typeof presets.getPresets !== 'function') {
-                    throw new Error('Jellybutter: the Butterchurn bundles did not define createVisualizer and getPresets');
-                }
-                state.engine = engine;
-                state.presets = presets.getPresets();
-                state.names = Object.keys(state.presets).sort();
-            }, function (err) {
-                state.libs = null;
-                throw err;
-            });
+            var globals = JellybutterCore.presetGlobals(config.presetPacks);
+            var files = { butterchurnPresets: 'butterchurn-presets.js' };
+            config.presetPacks.forEach(function (p, i) { files[globals[i + 1]] = 'butterchurn-presets-' + p + '.js'; });
+            var load = function (global, file) {
+                return window[global] ? Promise.resolve() : loadScript(JellybutterCore.assetUrl(assetBase, file, version));
+            };
+            state.libs = Promise.all([load('butterchurn', 'butterchurn.js')].concat(globals.map(function (g) { return load(g, files[g]); })))
+                .then(function () {
+                    // The UMD bundles expose the ES module namespace: the API is its default export.
+                    var engine = window.butterchurn && (window.butterchurn.default || window.butterchurn);
+                    if (!engine || typeof engine.createVisualizer !== 'function') {
+                        throw new Error('Jellybutter: the Butterchurn bundle did not define createVisualizer');
+                    }
+                    var presets = {};
+                    globals.forEach(function (g) {
+                        var pack = window[g] && (window[g].default || window[g]);
+                        if (!pack || typeof pack.getPresets !== 'function') {
+                            throw new Error('Jellybutter: the preset bundle ' + g + ' did not define getPresets');
+                        }
+                        var found = pack.getPresets();
+                        // Packs share a few names; the first pack to define one keeps it.
+                        Object.keys(found).forEach(function (name) { if (!presets[name]) { presets[name] = found[name]; } });
+                    });
+                    state.engine = engine;
+                    state.presets = presets;
+                    state.names = Object.keys(presets).sort();
+                }, function (err) {
+                    state.libs = null;
+                    throw err;
+                });
         }
         return state.libs;
+    }
+
+    // ---- Preset votes --------------------------------------------------------------------------------------
+
+    var VOTES_PATH = 'Jellybutter/Presets/Votes';
+
+    /** Fetches the likes and blocks this user goes by; never rejects, and gives up after a few seconds. */
+    function fetchVotes() {
+        var api = window.ApiClient;
+        if (!api || typeof api.getJSON !== 'function' || typeof api.getUrl !== 'function' || typeof api.ajax !== 'function') {
+            state.voting = false;
+            return Promise.resolve();
+        }
+        var request;
+        try { request = api.getJSON(api.getUrl(VOTES_PATH)); } catch (e) { request = Promise.reject(e); }
+        var fetched = Promise.resolve(request).then(function (summary) {
+            state.votes = JellybutterCore.voteSets(summary);
+            state.voting = true;
+        }, function (err) {
+            // Signed out, or a server without the endpoint: presets still play, unvoted.
+            state.voting = false;
+            console.warn('[Jellybutter] preset votes unavailable', err);
+        });
+        return Promise.race([fetched, new Promise(function (resolve) { setTimeout(resolve, 3000); })]);
+    }
+
+    function voteOf(name) {
+        if (!name) { return null; }
+        if (state.votes.blocks[name]) { return 'block'; }
+        return state.votes.likes[name] ? 'like' : null;
+    }
+
+    function updateVoteButtons() {
+        var vote = voteOf(state.current);
+        ui.like.hidden = !state.voting;
+        ui.block.hidden = !state.voting;
+        ui.like.setAttribute('aria-pressed', vote === 'like' ? 'true' : 'false');
+        ui.block.setAttribute('aria-pressed', vote === 'block' ? 'true' : 'false');
+    }
+
+    /**
+     * Likes or blocks the showing preset, or takes the vote back when it is already that. A block moves on
+     * at once, to a preset nobody voted on (not seen yet when there is one). Applied here first, then saved;
+     * the server's answer replaces the lists, and a failed save puts them back.
+     */
+    function castVote(kind) {
+        var name = state.current;
+        if (!name || !state.voting) { return; }
+        var send = voteOf(name) === kind ? 'none' : kind;
+        var before = state.votes;
+        var likes = Object.assign(Object.create(null), before.likes);
+        var blocks = Object.assign(Object.create(null), before.blocks);
+        delete likes[name];
+        delete blocks[name];
+        if (send === 'like') { likes[name] = true; }
+        if (send === 'block') { blocks[name] = true; }
+        state.votes = { likes: likes, blocks: blocks };
+        flash({ like: 'Liked', block: 'Blocked', none: kind === 'like' ? 'No longer liked' : 'No longer blocked' }[send], name);
+        if (send === 'block') { nextPreset({ unrated: true }); } else { updateVoteButtons(); }
+        var api = window.ApiClient;
+        var request;
+        try {
+            request = api.ajax({
+                type: 'POST',
+                url: api.getUrl(VOTES_PATH),
+                data: JSON.stringify({ preset: name, vote: send }),
+                contentType: 'application/json',
+                dataType: 'json'
+            });
+        } catch (e) { request = Promise.reject(e); }
+        Promise.resolve(request).then(function (summary) {
+            state.votes = JellybutterCore.voteSets(summary);
+            updateVoteButtons();
+        }, function (err) {
+            console.error('[Jellybutter] saving the vote failed', err);
+            state.votes = before;
+            updateVoteButtons();
+            flash('Could not save the vote', name);
+        });
     }
 
     function viewport() {
@@ -1143,20 +1306,68 @@
         updateLyrics(true);
     }
 
-    function loadPreset(index, blend) {
-        if (!state.visualizer || !state.names.length) { return; }
-        state.index = JellybutterCore.stepIndex(index, state.names.length, 0);
-        var name = state.names[state.index];
-        state.visualizer.loadPreset(state.presets[name], typeof blend === 'number' ? blend : config.blendSeconds);
+    /** A short message at the top left: a headline over a smaller line. */
+    function flash(headline, detail) {
         ui.toast.textContent = '';
-        ui.toast.appendChild(document.createTextNode(name));
-        var counter = document.createElement('small');
-        counter.textContent = (state.index + 1) + ' / ' + state.names.length;
-        ui.toast.appendChild(counter);
+        ui.toast.appendChild(document.createTextNode(headline));
+        if (detail) {
+            var small = document.createElement('small');
+            small.textContent = detail;
+            ui.toast.appendChild(small);
+        }
         ui.toast.classList.add('jellybutter-shown');
         clearTimeout(state.flashTimer);
         state.flashTimer = setTimeout(function () { ui.toast.classList.remove('jellybutter-shown'); }, NAME_FLASH_MS);
+    }
+
+    function showPreset(name, blend) {
+        if (!state.visualizer || !name || !state.presets[name]) { return; }
+        state.visualizer.loadPreset(state.presets[name], typeof blend === 'number' ? blend : config.blendSeconds);
+        state.current = name;
+        state.seen[name] = true;
+        flash(name, state.votes.likes[name] ? 'Liked' : '');
+        updateVoteButtons();
         restartCycle();
+    }
+
+    /**
+     * The next preset: forward through history after going back, otherwise a new pick (see pickPreset),
+     * which `options.unrated` limits to presets nobody voted on.
+     */
+    function nextPreset(options, blend) {
+        if (!state.names.length) { return; }
+        var unrated = !!(options && options.unrated);
+        if (!unrated) {
+            while (state.historyPos < state.history.length - 1) {
+                var ahead = state.history[++state.historyPos];
+                if (!state.votes.blocks[ahead]) { showPreset(ahead, blend); return; }
+            }
+        }
+        var name = JellybutterCore.pickPreset(state.names, state.votes, {
+            likeWeight: config.likeWeight,
+            likedOnly: config.likedOnly,
+            unrated: unrated,
+            seen: state.seen,
+            recent: state.history.slice(-RECENT_PRESETS)
+        });
+        if (!name) {
+            flash('Every preset is blocked', 'Clear some in the plugin settings');
+            return;
+        }
+        state.history = state.history.slice(0, state.historyPos + 1).concat([name]).slice(-HISTORY_LIMIT);
+        state.historyPos = state.history.length - 1;
+        showPreset(name, blend);
+    }
+
+    /** Back through the presets shown, skipping any blocked since. */
+    function prevPreset() {
+        for (var pos = state.historyPos - 1; pos >= 0; pos--) {
+            if (!state.votes.blocks[state.history[pos]]) {
+                state.historyPos = pos;
+                showPreset(state.history[pos]);
+                return;
+            }
+        }
     }
 
     function restartCycle() {
@@ -1164,7 +1375,7 @@
         state.cycleTimer = 0;
         if (config.cycleMode === 'seconds' && config.cycleSeconds > 0 && state.open) {
             state.cycleTimer = setInterval(function () {
-                loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, 1));
+                nextPreset();
             }, config.cycleSeconds * 1000);
         }
     }
@@ -1188,7 +1399,7 @@
         if (key === null || key === state.sliceKey) { return; }
         var first = state.sliceKey === null;
         state.sliceKey = key;
-        if (!first) { loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, 1)); }
+        if (!first) { nextPreset(); }
     }
 
     // ---- Lyrics --------------------------------------------------------------------------------------------
@@ -1563,7 +1774,7 @@
             console.error('[Jellybutter] could not attach to the audio element', err);
             return;
         }
-        ensureLibs().then(function () {
+        Promise.all([ensureLibs(), fetchVotes()]).then(function () {
             opening = false;
             if (!state.audio || !state.tap) { return; }
             state.open = true;
@@ -1579,7 +1790,7 @@
                 unsupported(err);
                 return;
             }
-            loadPreset(JellybutterCore.randomIndex(state.names.length, -1), 0);
+            nextPreset(null, 0);
             setUiHidden(hideUi);
             setLyrics(config.defaultView === 'lyrics');
             render();
@@ -1686,8 +1897,10 @@
         if (action === 'toggle') { toggle(); }
         else if (action === 'close') { close(); }
         else if (action === 'lyrics') { setLyrics(!state.lyricsOn); }
-        else if (action === 'next') { loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, 1)); }
-        else if (action === 'prev') { loadPreset(JellybutterCore.stepIndex(state.index, state.names.length, -1)); }
+        else if (action === 'next') { nextPreset(); }
+        else if (action === 'prev') { prevPreset(); }
+        else if (action === 'like') { castVote('like'); }
+        else if (action === 'block') { castVote('block'); }
     }
 
     // ---- Idle visualizer ------------------------------------------------------------------------------------

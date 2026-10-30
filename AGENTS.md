@@ -207,6 +207,19 @@ repo.
   that stays suspended would mute the music. With `idleHideUi`, a visualizer opened by hand minimizes
   after the same idle time while music plays (`shouldIdleHide`). Input is any keydown, input command,
   pointer or wheel event; `checkIdle` runs every 5 s and counts its own attempt as input.
+- **Preset picks are weighted draws, never steps through a list.** `pickPreset`: blocked never, liked
+  `likeWeight` times as likely, `likedOnly` narrows to likes (all unblocked while none), and `unrated`
+  (after a block) to presets nobody voted on, unseen ones first. The last few are avoided. Previous walks
+  `state.history`; Next after Previous walks forward through it before drawing again. Votes load with
+  the bundles at every open (`fetchVotes`, never blocking the open for more than 3 s) and a vote applies
+  locally before the POST answers, rolled back on failure.
+- **Votes are stored per user, always** (`PresetVoteBook`, in `Jellyfin.Plugin.Jellybutter.votes.json`
+  beside the settings XML, outside the versioned plugin folder). Shared mode takes the newest vote on a
+  preset from anyone, including a cleared one; per-user mode takes the caller's own. Switching modes
+  therefore applies to every vote already cast. The caller comes from `IAuthorizationContext`; the
+  controller takes it as a function, since `AuthorizationInfo.UserId` cannot be set in a test.
+- **Four preset packs**, each its own embedded bundle and global (`butterchurnPresets`, `…Extra`,
+  `…Extra2`, `…MD1`), loaded together on first open; where packs share a name the first pack keeps it.
 - **Per-song preset cycling** (`cycleMode: 'track'`) runs from the render loop, not a timer: `trackSlice`
   keys the playing element's `currentSrc` and its slice of `cyclesPerTrack` equal slices, and a new key
   loads the next preset. The key is null while the duration is unknown, so the gap between tracks is not

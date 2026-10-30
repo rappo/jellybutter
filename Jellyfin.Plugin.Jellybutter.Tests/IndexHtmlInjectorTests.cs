@@ -10,7 +10,7 @@ public class IndexHtmlInjectorTests
 {
     private const string Index = "<!doctype html><html><head><title>Jellyfin</title></head><body><div id=\"reactRoot\"></div><script defer=\"defer\" src=\"main.jellyfin.bundle.js\"></script></body></html>";
 
-    private static readonly ClientSettings _settings = new(DesktopWebAudio: true, CycleSeconds: 30, BlendSeconds: 2.7, ControlButton: true, FloatingButton: true, NowPlayingBar: true, DefaultView: "visualizer", LyricsSize: "medium", IdleVisualizer: true, IdleMinutes: 2, IdleHideUi: true, CycleMode: "seconds", CyclesPerTrack: 1);
+    private static readonly ClientSettings _settings = new(DesktopWebAudio: true, CycleSeconds: 30, BlendSeconds: 2.7, ControlButton: true, FloatingButton: true, NowPlayingBar: true, DefaultView: "visualizer", LyricsSize: "medium", IdleVisualizer: true, IdleMinutes: 2, IdleHideUi: true, CycleMode: "seconds", CyclesPerTrack: 1, LikeWeight: 3, LikedOnly: false, PresetPacks: ClientSettings.Packs);
 
     [Fact]
     public void Inject_AddsTheTagBeforeBodyClose_Once()
@@ -38,7 +38,7 @@ public class IndexHtmlInjectorTests
     [Fact]
     public void ScriptTag_CarriesTheSettingsAsHtmlSafeJson_ThatDecodesBack()
     {
-        var tag = IndexHtmlInjector.ScriptTag("1.0", new ClientSettings(false, 45, 1.5, true, true, true, "visualizer", "medium", true, 2, true, "seconds", 1));
+        var tag = IndexHtmlInjector.ScriptTag("1.0", new ClientSettings(false, 45, 1.5, true, true, true, "visualizer", "medium", true, 2, true, "seconds", 1, 3, false, ClientSettings.Packs));
 
         // The JSON's own quotes are entity-encoded so the attribute's quotes survive.
         Assert.DoesNotContain("{\"", tag, StringComparison.Ordinal);

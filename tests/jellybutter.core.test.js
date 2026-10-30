@@ -4,14 +4,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const core = require('../Jellyfin.Plugin.Jellybutter/Web/jellybutter.js');
 
-const DEFAULTS = { desktopWebAudio: true, cycleMode: 'seconds', cycleSeconds: 30, cyclesPerTrack: 1, blendSeconds: 2.7, controlButton: true, floatingButton: true, nowPlayingBar: true, defaultView: 'visualizer', lyricsSize: 'medium', idleVisualizer: true, idleMinutes: 2, idleHideUi: true };
+const DEFAULTS = { desktopWebAudio: true, cycleMode: 'seconds', cycleSeconds: 30, cyclesPerTrack: 1, blendSeconds: 2.7, controlButton: true, floatingButton: true, nowPlayingBar: true, defaultView: 'visualizer', lyricsSize: 'medium', idleVisualizer: true, idleMinutes: 2, idleHideUi: true, likeWeight: 3, likedOnly: false, presetPacks: ['extra', 'extra2', 'md1'] };
 
 test('parseConfig: fills defaults for a missing, malformed or partial attribute', () => {
     assert.deepEqual(core.parseConfig(null), DEFAULTS);
     assert.deepEqual(core.parseConfig('not json'), DEFAULTS);
     assert.deepEqual(core.parseConfig('{"cycleSeconds":0}'), { ...DEFAULTS, cycleSeconds: 0 });
-    assert.deepEqual(core.parseConfig('{"desktopWebAudio":false,"cycleSeconds":45,"blendSeconds":1.5,"controlButton":false,"floatingButton":false,"nowPlayingBar":false,"defaultView":"lyrics","lyricsSize":"large","idleVisualizer":false,"idleMinutes":5,"idleHideUi":false,"cycleMode":"track","cyclesPerTrack":3}'),
-        { desktopWebAudio: false, cycleMode: 'track', cycleSeconds: 45, cyclesPerTrack: 3, blendSeconds: 1.5, controlButton: false, floatingButton: false, nowPlayingBar: false, defaultView: 'lyrics', lyricsSize: 'large', idleVisualizer: false, idleMinutes: 5, idleHideUi: false });
+    assert.deepEqual(core.parseConfig('{"desktopWebAudio":false,"cycleSeconds":45,"blendSeconds":1.5,"controlButton":false,"floatingButton":false,"nowPlayingBar":false,"defaultView":"lyrics","lyricsSize":"large","idleVisualizer":false,"idleMinutes":5,"idleHideUi":false,"cycleMode":"track","cyclesPerTrack":3,"likeWeight":5,"likedOnly":true,"presetPacks":["md1"]}'),
+        { desktopWebAudio: false, cycleMode: 'track', cycleSeconds: 45, cyclesPerTrack: 3, blendSeconds: 1.5, controlButton: false, floatingButton: false, nowPlayingBar: false, defaultView: 'lyrics', lyricsSize: 'large', idleVisualizer: false, idleMinutes: 5, idleHideUi: false, likeWeight: 5, likedOnly: true, presetPacks: ['md1'] });
     // Idle minutes: whole minutes, 1 to 60.
     assert.equal(core.parseConfig('{"idleMinutes":0}').idleMinutes, 1);
     assert.equal(core.parseConfig('{"idleMinutes":600}').idleMinutes, 60);
@@ -33,6 +33,12 @@ test('parseConfig: fills defaults for a missing, malformed or partial attribute'
     assert.equal(core.parseConfig('{"cyclesPerTrack":0}').cyclesPerTrack, 1);
     assert.equal(core.parseConfig('{"cyclesPerTrack":99}').cyclesPerTrack, 20);
     assert.equal(core.parseConfig('{"cyclesPerTrack":2.6}').cyclesPerTrack, 3);
+    // Like weight 2 to 10; packs only known ones, in a fixed order; an older tag gets every pack.
+    assert.equal(core.parseConfig('{"likeWeight":1}').likeWeight, 2);
+    assert.equal(core.parseConfig('{"likeWeight":40}').likeWeight, 10);
+    assert.deepEqual(core.parseConfig('{"presetPacks":["md1","bogus","extra"]}').presetPacks, ['extra', 'md1']);
+    assert.deepEqual(core.parseConfig('{"presetPacks":[]}').presetPacks, []);
+    assert.deepEqual(core.parseConfig('{"controlButton":true}').presetPacks, ['extra', 'extra2', 'md1']);
     // A tag from 1.1.0.0, before the setting existed, gets the bar.
     assert.equal(core.parseConfig('{"controlButton":true}').nowPlayingBar, true);
 });
@@ -51,29 +57,67 @@ test('filterNativePlugins: drops only the mpv audio player, only when the settin
     assert.equal(core.filterNativePlugins('mpvAudioPlayer', { desktopWebAudio: true }), 'mpvAudioPlayer');
 });
 
-test('stepIndex wraps in both directions and survives an empty list', () => {
-    assert.equal(core.stepIndex(0, 5, 1), 1);
-    assert.equal(core.stepIndex(4, 5, 1), 0);
-    assert.equal(core.stepIndex(0, 5, -1), 4);
-    assert.equal(core.stepIndex(7, 5, 0), 2);
-    assert.equal(core.stepIndex(3, 0, 1), 0);
+test('pickPreset: blocked never, liked more often by the weight, the rest at 1', () => {
+    const names = ['a', 'b', 'c', 'd'];
+    const votes = core.voteSets({ likes: ['b'], blocks: ['d'] });
+    const counts = { a: 0, b: 0, c: 0, d: 0 };
+    // A sweep of evenly spread draws: the pool is a, b (weight 3), c, a total of 5.
+    for (let i = 0; i < 1000; i++) { counts[core.pickPreset(names, votes, { likeWeight: 3 }, () => (i + 0.5) / 1000)]++; }
+    assert.deepEqual(counts, { a: 200, b: 600, c: 200, d: 0 });
 });
 
-test('randomIndex never repeats the current preset when there is a choice', () => {
-    for (let i = 0; i < 50; i++) {
-        const pick = core.randomIndex(10, 3);
-        assert.ok(pick >= 0 && pick < 10 && pick !== 3, `picked ${pick}`);
+test('pickPreset: liked only, falling back to every unblocked preset while none is liked', () => {
+    const names = ['a', 'b', 'c'];
+    for (let i = 0; i < 20; i++) {
+        assert.equal(core.pickPreset(names, core.voteSets({ likes: ['b'] }), { likedOnly: true }, () => i / 20), 'b');
     }
-    assert.equal(core.randomIndex(10, 3, () => 0.3), 2);     // 0.3 * 9 = 2.7 -> 2, below the current 3 so kept
-    assert.equal(core.randomIndex(10, 3, () => 0.5), 5);     // 0.5 * 9 = 4.5 -> 4, at or past the current 3 so shifted up
-    assert.equal(core.randomIndex(10, 0, () => 0), 1);
-    assert.equal(core.randomIndex(1, 0), 0);
-    assert.equal(core.randomIndex(0, 0), 0);
-    // A current index of -1 (nothing loaded yet) allows every preset.
-    assert.equal(core.randomIndex(10, -1, () => 0), 0);
+    const any = new Set();
+    for (let i = 0; i < 20; i++) { any.add(core.pickPreset(names, core.voteSets({ blocks: ['c'] }), { likedOnly: true }, () => i / 20)); }
+    assert.deepEqual([...any].sort(), ['a', 'b']);
 });
 
-test('hotkeyFor: v toggles while a track is loaded or the overlay is open; b, n, l and Escape only while open', () => {
+test('pickPreset: after a block, only presets nobody voted on, unseen ones first', () => {
+    const names = ['a', 'b', 'c', 'd'];
+    const votes = core.voteSets({ likes: ['a'], blocks: ['b'] });
+    const seen = Object.assign(Object.create(null), { c: true });
+    for (let i = 0; i < 20; i++) {
+        assert.equal(core.pickPreset(names, votes, { unrated: true, seen, likeWeight: 3 }, () => i / 20), 'd');
+    }
+    // Everything unrated already seen: any unrated one, still never the liked or blocked one.
+    seen.d = true;
+    const any = new Set();
+    for (let i = 0; i < 20; i++) { any.add(core.pickPreset(names, votes, { unrated: true, seen }, () => i / 20)); }
+    assert.deepEqual([...any].sort(), ['c', 'd']);
+    // Nothing unrated left: back to the unblocked ones.
+    assert.equal(core.pickPreset(['a', 'b'], votes, { unrated: true }, () => 0.9), 'a');
+});
+
+test('pickPreset: avoids recent presets while others remain, null when all are blocked', () => {
+    assert.equal(core.pickPreset(['a', 'b'], null, { recent: ['a'] }, () => 0), 'b');
+    assert.equal(core.pickPreset(['a'], null, { recent: ['a'] }, () => 0), 'a');
+    assert.equal(core.pickPreset(['a', 'b'], core.voteSets({ blocks: ['a', 'b'] }), {}, () => 0), null);
+    assert.equal(core.pickPreset([], null, {}, () => 0), null);
+});
+
+test('voteSets: the server summary as lookup sets, safe for any preset name', () => {
+    const v = core.voteSets({ likes: ['constructor', 'a'], blocks: ['b', 7] });
+    assert.equal(v.likes.constructor, true);
+    assert.equal(v.likes.toString, undefined);                                   // no prototype to collide with
+    assert.equal(v.blocks.b, true);
+    assert.deepEqual(Object.keys(v.blocks), ['b']);
+    assert.deepEqual(Object.keys(core.voteSets(null).likes), []);
+});
+
+test('presetGlobals: the base pack, then the known optional packs chosen', () => {
+    assert.deepEqual(core.presetGlobals(['extra', 'md1']), ['butterchurnPresets', 'butterchurnPresetsExtra', 'butterchurnPresetsMD1']);
+    assert.deepEqual(core.presetGlobals([]), ['butterchurnPresets']);
+    assert.deepEqual(core.presetGlobals(['toString', 'nope']), ['butterchurnPresets']);
+});
+
+test('hotkeyFor: v toggles while a track is loaded or the overlay is open; b, n, l, h, x and Escape only while open', () => {
+    assert.equal(core.hotkeyFor('h', true, true), 'like');
+    assert.equal(core.hotkeyFor('X', true, true), 'block');
+    assert.equal(core.hotkeyFor('h', false, true), null);
     assert.equal(core.hotkeyFor('l', true, true), 'lyrics');
     assert.equal(core.hotkeyFor('L', true, false), 'lyrics');
     assert.equal(core.hotkeyFor('l', false, true), null);
@@ -85,7 +129,7 @@ test('hotkeyFor: v toggles while a track is loaded or the overlay is open; b, n,
     assert.equal(core.hotkeyFor('Escape', true, true), 'close');
     assert.equal(core.hotkeyFor('b', false, true), null);
     assert.equal(core.hotkeyFor('Escape', false, true), null);
-    assert.equal(core.hotkeyFor('x', true, true), null);
+    assert.equal(core.hotkeyFor('q', true, true), null);
     assert.equal(core.hotkeyFor('v', true, true, { ctrlKey: true }), null);
     assert.equal(core.hotkeyFor(undefined, true, true), null);
 });

@@ -14,6 +14,9 @@
         .jellybutter-help:hover .jellybutter-tip, .jellybutter-help:focus .jellybutter-tip { display: block; }
         .jellybutter-label { display: inline-flex; align-items: center; }
         .jellybutter-version { opacity: .6; font-size: .9em; }
+        .jellybutter-vote-table { width: 100%; border-collapse: collapse; margin-bottom: 1em; }
+        .jellybutter-vote-table th, .jellybutter-vote-table td { text-align: left; padding: .4em .6em; border-bottom: 1px solid rgba(128,128,128,.25); }
+        .jellybutter-vote-table td:last-child { text-align: right; }
     </style>
     <div data-role="content">
         <div class="content-primary">
@@ -136,12 +139,77 @@
                         </label>
                     </div>
                 </div>
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Likes and blocks</h2>
+                    <div class="inputContainer">
+                        <label class="inputLabel inputLabelUnfocused jellybutter-label" for="jellybutterLikeWeight">Liked presets come up (times as often)
+                            <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">2 to 10. Blocked presets never come up.</span></span>
+                        </label>
+                        <input is="emby-input" type="number" id="jellybutterLikeWeight" min="2" max="10" step="1" required />
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="jellybutterLikedOnly" />
+                            <span class="jellybutter-label">Show only liked presets
+                                <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">Every preset that is not blocked comes up while nothing is liked yet.</span></span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="jellybutterVotesPerUser" />
+                            <span class="jellybutter-label">Separate likes and blocks for each user
+                                <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">Off, everyone shares one list and the latest vote counts. Votes always record who cast them, so switching applies to past votes too.</span></span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Preset packs</h2>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="jellybutterPackExtra" />
+                            <span class="jellybutter-label">Extra (146 presets)
+                                <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">From butterchurn-presets, like the 100 built-in presets. About 0.8 MB, loaded the first time the visualizer opens.</span></span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="jellybutterPackExtra2" />
+                            <span class="jellybutter-label">Extra 2 (122 presets)
+                                <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">About 0.6 MB. Turn a pack off for a slow connection or a weak GPU; some presets are heavier.</span></span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="jellybutterPackMd1" />
+                            <span class="jellybutter-label">MD1 (87 presets)
+                                <span class="jellybutter-help" tabindex="0" role="note"><span aria-hidden="true">?</span><span class="jellybutter-tip">Classic MilkDrop 1 era presets, mostly by other authors. About 0.3 MB.</span></span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
                 <div>
                     <button is="emby-button" type="submit" class="raised button-submit block emby-button">
                         <span>Save</span>
                     </button>
                 </div>
             </form>
+            <div class="verticalSection jellybutter-votes">
+                <h2 class="sectionTitle">Votes</h2>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="jellybutterVoteSearch">Search presets</label>
+                    <input is="emby-input" type="search" id="jellybutterVoteSearch" />
+                </div>
+                <p id="jellybutterVoteEmpty" hidden>No likes or blocks yet. Use the heart and block buttons while the visualizer is open.</p>
+                <table id="jellybutterVoteTable" class="jellybutter-vote-table" hidden>
+                    <thead><tr><th>Preset</th><th>Vote</th><th>By</th><th>When</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                <button is="emby-button" type="button" id="jellybutterVoteReset" class="raised emby-button" hidden><span>Clear all votes</span></button>
+            </div>
         </div>
     </div>
     <script type="text/javascript">
@@ -166,6 +234,12 @@
                     page.querySelector('#jellybutterIdleVisualizer').checked = config.IdleVisualizer !== false;
                     page.querySelector('#jellybutterIdleMinutes').value = typeof config.IdleMinutes === 'number' ? config.IdleMinutes : 2;
                     page.querySelector('#jellybutterIdleHideUi').checked = config.IdleHideUi !== false;
+                    page.querySelector('#jellybutterLikeWeight').value = typeof config.LikeWeight === 'number' ? config.LikeWeight : 3;
+                    page.querySelector('#jellybutterLikedOnly').checked = config.LikedOnly === true;
+                    page.querySelector('#jellybutterVotesPerUser').checked = config.VotesPerUser === true;
+                    page.querySelector('#jellybutterPackExtra').checked = config.PackExtra !== false;
+                    page.querySelector('#jellybutterPackExtra2').checked = config.PackExtra2 !== false;
+                    page.querySelector('#jellybutterPackMd1').checked = config.PackMd1 !== false;
                     syncIdle();
                     syncCycle();
                     Dashboard.hideLoadingMsg();
@@ -174,6 +248,68 @@
                     var me = (plugins || []).filter(function (p) { return (p.Id || '').replace(/-/g, '') === pluginId.replace(/-/g, ''); })[0];
                     if (me && me.Version) { page.querySelector('#jellybutterVersion').textContent = 'v' + me.Version; }
                 }).catch(function () { /* the version is a nicety */ });
+                loadVotes();
+            }
+
+            // ---- Votes: every user's likes and blocks, newest first, with a way to clear them ----
+
+            var votesUrl = 'Jellybutter/Presets/Votes';
+            var votes = [];
+            var userNames = {};
+
+            function idKey(id) { return String(id || '').replace(/-/g, '').toLowerCase(); }
+
+            function loadVotes() {
+                Promise.all([
+                    ApiClient.getJSON(ApiClient.getUrl(votesUrl + '/All')),
+                    ApiClient.getUsers().catch(function () { return []; })
+                ]).then(function (results) {
+                    votes = results[0] || [];
+                    userNames = {};
+                    (results[1] || []).forEach(function (u) { userNames[idKey(u.Id)] = u.Name; });
+                    renderVotes();
+                }).catch(function (err) { console.error('[Jellybutter] loading votes failed', err); });
+            }
+
+            function renderVotes() {
+                var search = page.querySelector('#jellybutterVoteSearch').value.trim().toLowerCase();
+                var shown = votes.filter(function (v) { return !search || v.preset.toLowerCase().indexOf(search) >= 0; })
+                    .sort(function (a, b) { return a.at < b.at ? 1 : a.at > b.at ? -1 : 0; });
+                var body = page.querySelector('#jellybutterVoteTable tbody');
+                body.textContent = '';
+                shown.forEach(function (v) {
+                    var row = document.createElement('tr');
+                    [v.preset, v.vote === 'like' ? 'Liked' : 'Blocked', userNames[idKey(v.userId)] || 'Unknown user', new Date(v.at).toLocaleString()].forEach(function (text) {
+                        var cell = document.createElement('td');
+                        cell.textContent = text;
+                        row.appendChild(cell);
+                    });
+                    var actions = document.createElement('td');
+                    var clear = document.createElement('button');
+                    clear.type = 'button';
+                    clear.setAttribute('is', 'emby-button');
+                    clear.className = 'emby-button';
+                    clear.textContent = 'Clear';
+                    clear.title = 'Forget every vote on this preset';
+                    clear.addEventListener('click', function () {
+                        clear.disabled = true;
+                        clearVotes(v.preset);
+                    });
+                    actions.appendChild(clear);
+                    row.appendChild(actions);
+                    body.appendChild(row);
+                });
+                page.querySelector('#jellybutterVoteTable').hidden = !shown.length;
+                page.querySelector('#jellybutterVoteEmpty').hidden = votes.length > 0;
+                page.querySelector('#jellybutterVoteReset').hidden = !votes.length;
+            }
+
+            function clearVotes(preset) {
+                var url = ApiClient.getUrl(votesUrl, preset ? { preset: preset } : {});
+                ApiClient.ajax({ type: 'DELETE', url: url }).then(loadVotes, function (err) {
+                    console.error('[Jellybutter] clearing votes failed', err);
+                    loadVotes();
+                });
             }
 
             // The idle time only means something while one of the idle options is on.
@@ -190,6 +326,22 @@
             }
 
             page.addEventListener('pageshow', load);
+            page.querySelector('#jellybutterVoteSearch').addEventListener('input', renderVotes);
+
+            // Clearing every vote takes a second click within a few seconds.
+            var resetArmed = 0;
+            page.querySelector('#jellybutterVoteReset').addEventListener('click', function () {
+                var label = page.querySelector('#jellybutterVoteReset span');
+                if (!resetArmed) {
+                    label.textContent = 'Click again to clear every vote';
+                    resetArmed = setTimeout(function () { resetArmed = 0; label.textContent = 'Clear all votes'; }, 4000);
+                    return;
+                }
+                clearTimeout(resetArmed);
+                resetArmed = 0;
+                label.textContent = 'Clear all votes';
+                clearVotes(null);
+            });
             page.querySelector('#jellybutterIdleVisualizer').addEventListener('change', syncIdle);
             page.querySelector('#jellybutterIdleHideUi').addEventListener('change', syncIdle);
             page.querySelector('#jellybutterCycleMode').addEventListener('change', syncCycle);
@@ -224,6 +376,12 @@
                     config.IdleVisualizer = page.querySelector('#jellybutterIdleVisualizer').checked;
                     config.IdleMinutes = Math.max(1, Math.min(60, Math.round(Number(page.querySelector('#jellybutterIdleMinutes').value) || 2)));
                     config.IdleHideUi = page.querySelector('#jellybutterIdleHideUi').checked;
+                    config.LikeWeight = Math.max(2, Math.min(10, Math.round(Number(page.querySelector('#jellybutterLikeWeight').value) || 3)));
+                    config.LikedOnly = page.querySelector('#jellybutterLikedOnly').checked;
+                    config.VotesPerUser = page.querySelector('#jellybutterVotesPerUser').checked;
+                    config.PackExtra = page.querySelector('#jellybutterPackExtra').checked;
+                    config.PackExtra2 = page.querySelector('#jellybutterPackExtra2').checked;
+                    config.PackMd1 = page.querySelector('#jellybutterPackMd1').checked;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(Dashboard.processPluginConfigurationUpdateResult);
                 });
                 return false;

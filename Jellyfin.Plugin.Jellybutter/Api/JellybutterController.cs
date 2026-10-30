@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -7,8 +8,8 @@ using Microsoft.Net.Http.Headers;
 namespace Jellyfin.Plugin.Jellybutter.Api;
 
 /// <summary>
-/// Serves the plugin's client-side files: the client script the injected tag loads, and the two Butterchurn
-/// bundles the script fetches the first time the visualizer opens. All anonymous, since index.html loads
+/// Serves the plugin's client-side files: the client script the injected tag loads, and the Butterchurn
+/// engine and preset packs the script fetches the first time the visualizer opens. All anonymous, since index.html loads
 /// the script before sign-in and none of them carries data. Every URL is addressed with the plugin version
 /// as a query; a request that names the current version is answered as immutable for a year, so a returning
 /// browser never asks again until an update changes the tag, and any other request revalidates each time.
@@ -28,6 +29,14 @@ public class JellybutterController : ControllerBase
     private static readonly Lazy<EmbeddedAsset?> _clientScript = new(() => Load("jellybutter.js"));
     private static readonly Lazy<EmbeddedAsset?> _butterchurn = new(() => Load("butterchurn.min.js"));
     private static readonly Lazy<EmbeddedAsset?> _presets = new(() => Load("butterchurnPresets.min.js"));
+
+    // The optional packs by the name the settings and the client use for them.
+    private static readonly Dictionary<string, Lazy<EmbeddedAsset?>> _packs = new(StringComparer.Ordinal)
+    {
+        ["extra"] = new(() => Load("butterchurnPresetsExtra.min.js")),
+        ["extra2"] = new(() => Load("butterchurnPresetsExtra2.min.js")),
+        ["md1"] = new(() => Load("butterchurnPresetsMD1.min.js"))
+    };
 
     private readonly Func<bool> _enabled;
 
@@ -84,6 +93,20 @@ public class JellybutterController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public IActionResult GetPresets([FromQuery] string? v) => Serve(_presets.Value, v);
+
+    /// <summary>
+    /// Serves one of the optional preset packs.
+    /// </summary>
+    /// <param name="pack">The pack: extra, extra2 or md1.</param>
+    /// <param name="v">The plugin version the caller expects.</param>
+    /// <returns>The pack, or 404 for an unknown pack or while the plugin is switched off.</returns>
+    [HttpGet("butterchurn-presets-{pack}.js")]
+    [AllowAnonymous]
+    [Produces(JavaScript)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public IActionResult GetPresetPack([FromRoute] string pack, [FromQuery] string? v)
+        => Serve(_packs.TryGetValue(pack, out var asset) ? asset.Value : null, v);
 
     /// <summary>
     /// Picks the cache directive for a request: immutable for a year when it names the current plugin

@@ -24,8 +24,9 @@ public class ClientSettingsTests
         Assert.Equal(2, config.IdleMinutes);
         Assert.True(config.IdleHideUi);
 
-        var settings = ClientSettings.FromConfiguration(config);
-        Assert.Equal(new ClientSettings(true, 30, 2.7, true, true, true, "visualizer", "medium", true, 2, true, "seconds", 1), settings);
+        // Compared as the JSON the script gets: the record compares its pack list by reference.
+        var settings = ClientSettings.FromConfiguration(config)!;
+        Assert.Equal(new ClientSettings(true, 30, 2.7, true, true, true, "visualizer", "medium", true, 2, true, "seconds", 1, 3, false, ClientSettings.Packs).ToJson(), settings.ToJson());
     }
 
     [Theory]
@@ -74,6 +75,26 @@ public class ClientSettingsTests
         Assert.False(settings.NowPlayingBar);
     }
 
+    [Theory]
+    [InlineData(3, 3)]
+    [InlineData(1, ClientSettings.MinLikeWeight)]
+    [InlineData(-4, ClientSettings.MinLikeWeight)]
+    [InlineData(50, ClientSettings.MaxLikeWeight)]
+    public void LikeWeight_IsClamped(int saved, int expected)
+        => Assert.Equal(expected, ClientSettings.FromConfiguration(new PluginConfiguration { LikeWeight = saved })!.LikeWeight);
+
+    [Fact]
+    public void PresetPacks_ListOnlyThePacksSwitchedOn_InAFixedOrder()
+    {
+        Assert.Equal(["extra", "extra2", "md1"], ClientSettings.FromConfiguration(new PluginConfiguration())!.PresetPacks);
+        Assert.Equal(["extra2"], ClientSettings.FromConfiguration(new PluginConfiguration { PackExtra = false, PackMd1 = false })!.PresetPacks);
+        Assert.Empty(ClientSettings.FromConfiguration(new PluginConfiguration { PackExtra = false, PackExtra2 = false, PackMd1 = false })!.PresetPacks);
+    }
+
+    [Fact]
+    public void LikedOnly_PassesThrough()
+        => Assert.True(ClientSettings.FromConfiguration(new PluginConfiguration { LikedOnly = true })!.LikedOnly);
+
     [Fact]
     public void SwitchedOffOrMissing_YieldsNothingToInject()
     {
@@ -118,8 +139,8 @@ public class ClientSettingsTests
     [Fact]
     public void ToJson_IsCompactCamelCase_AsTheScriptParsesIt()
     {
-        var json = new ClientSettings(false, 0, 2.7, true, false, true, "lyrics", "large", true, 2, true, "track", 3).ToJson();
+        var json = new ClientSettings(false, 0, 2.7, true, false, true, "lyrics", "large", true, 2, true, "track", 3, 5, true, ["md1"]).ToJson();
 
-        Assert.Equal("{\"desktopWebAudio\":false,\"cycleSeconds\":0,\"blendSeconds\":2.7,\"controlButton\":true,\"floatingButton\":false,\"nowPlayingBar\":true,\"defaultView\":\"lyrics\",\"lyricsSize\":\"large\",\"idleVisualizer\":true,\"idleMinutes\":2,\"idleHideUi\":true,\"cycleMode\":\"track\",\"cyclesPerTrack\":3}", json);
+        Assert.Equal("{\"desktopWebAudio\":false,\"cycleSeconds\":0,\"blendSeconds\":2.7,\"controlButton\":true,\"floatingButton\":false,\"nowPlayingBar\":true,\"defaultView\":\"lyrics\",\"lyricsSize\":\"large\",\"idleVisualizer\":true,\"idleMinutes\":2,\"idleHideUi\":true,\"cycleMode\":\"track\",\"cyclesPerTrack\":3,\"likeWeight\":5,\"likedOnly\":true,\"presetPacks\":[\"md1\"]}", json);
     }
 }

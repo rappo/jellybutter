@@ -27,6 +27,12 @@ public class PluginConfiguration : BasePluginConfiguration
         IdleVisualizer = true;
         IdleMinutes = 2;
         IdleHideUi = true;
+        LikeWeight = 3;
+        LikedOnly = false;
+        VotesPerUser = false;
+        PackExtra = true;
+        PackExtra2 = true;
+        PackMd1 = true;
     }
 
     /// <summary>
@@ -109,4 +115,35 @@ public class PluginConfiguration : BasePluginConfiguration
     /// visualizer opened by hand hides them after <see cref="IdleMinutes"/> without input.
     /// </summary>
     public bool IdleHideUi { get; set; }
+
+    /// <summary>
+    /// Gets or sets how many times as likely a liked preset is to come up as one nobody voted on.
+    /// </summary>
+    public int LikeWeight { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether only liked presets come up (all unblocked ones while none is liked).
+    /// </summary>
+    public bool LikedOnly { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether every user goes by their own likes and blocks instead of the
+    /// latest vote from anyone. Votes are stored per user either way, so switching applies to past votes.
+    /// </summary>
+    public bool VotesPerUser { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the Extra preset pack (butterchurn-presets) is used.
+    /// </summary>
+    public bool PackExtra { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the Extra2 preset pack is used.
+    /// </summary>
+    public bool PackExtra2 { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the MD1 preset pack is used.
+    /// </summary>
+    public bool PackMd1 { get; set; }
 }

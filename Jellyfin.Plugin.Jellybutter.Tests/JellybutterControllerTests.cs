@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Jellyfin.Plugin.Jellybutter.Tests;
 
-// The three asset endpoints serve files compiled into the plugin. The Butterchurn ones prove the npm bundles
+// The asset endpoints serve files compiled into the plugin. The Butterchurn ones prove the npm bundles
 // were embedded by the build: a missing node_modules would otherwise only show up in a browser.
 public class JellybutterControllerTests
 {
@@ -60,12 +60,32 @@ public class JellybutterControllerTests
         Assert.True(presets.Length > 100_000, "the presets bundle is far smaller than butterchurn-presets 2.4.7");
     }
 
+    [Theory]
+    [InlineData("extra", "butterchurnPresetsExtra=")]
+    [InlineData("extra2", "butterchurnPresetsExtra2=")]
+    [InlineData("md1", "butterchurnPresetsMD1=")]
+    public void TheOptionalPresetPacks_AreEmbedded_AndDefineTheirGlobals(string pack, string global)
+    {
+        var text = Encoding.UTF8.GetString(File(Controller().GetPresetPack(pack, null)).FileContents);
+
+        Assert.Contains(global, text, StringComparison.Ordinal);
+        Assert.Contains("getPresets", text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("base")]
+    [InlineData("Extra")]
+    [InlineData("../client")]
+    public void AnUnknownPack_Is404(string pack)
+        => Assert.IsType<NotFoundResult>(Controller().GetPresetPack(pack, null));
+
     [Fact]
     public void WhenSwitchedOff_EveryAssetIs404()
     {
         Assert.IsType<NotFoundResult>(Controller(enabled: false).GetClientScript(null));
         Assert.IsType<NotFoundResult>(Controller(enabled: false).GetButterchurn(null));
         Assert.IsType<NotFoundResult>(Controller(enabled: false).GetPresets(null));
+        Assert.IsType<NotFoundResult>(Controller(enabled: false).GetPresetPack("extra", null));
     }
 
     [Fact]

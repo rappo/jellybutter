@@ -110,3 +110,4 @@ npm ci && npm test && dotnet test
 ## License
 
 MIT. Butterchurn and butterchurn-presets are MIT, (c) Jordan Berg; the presets carry their authors' names.
+Their license texts ship in every release as `THIRD-PARTY-NOTICES.txt`.

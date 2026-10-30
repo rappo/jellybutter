@@ -23,6 +23,8 @@ Desktop. This file is authoritative for the repo; `CLAUDE.md` only points here.
 
 ```
 meta.json                          plugin manifest in the zip; THE version lives here
+THIRD-PARTY-NOTICES.txt            license texts of the embedded bundles, shipped in the zip; tests/notices.test.js
+                                   fails when an embedded package's version or LICENSE no longer matches
 manifest.json                      the plugin-repository index Jellyfin polls; CI writes it, never edit by hand
 package.json                       pins Butterchurn; `npm test` runs tests/
 Dockerfile                         CI build: test + publish in the SDK image, output stage holds the zip's files
@@ -89,8 +91,8 @@ run `jellyfin/jellyfin --datadir D --configdir C --cachedir K --logdir L --webdi
 ## Release
 
 1. Bump `version` (and `changelog`) in `meta.json`. Commit on `main` and push.
-2. CI builds, tests, zips `Jellyfin.Plugin.Jellybutter.dll` + `meta.json`, creates release `v<version>` with
-   the zip attached, and commits `manifest.json` (md5, download URL, timestamp) back to `main` with
+2. CI builds, tests, zips `Jellyfin.Plugin.Jellybutter.dll` + `meta.json` + `THIRD-PARTY-NOTICES.txt`,
+   creates release `v<version>` with the zip attached, and commits `manifest.json` (md5, download URL, timestamp) back to `main` with
    `[skip ci]`. A version that already has a release is skipped, so a push without a bump publishes nothing.
 3. Jellyfin servers that added `.../raw/branch/main/manifest.json` as a repository pick it up.
 

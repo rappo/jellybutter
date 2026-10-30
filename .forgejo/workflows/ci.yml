@@ -32,7 +32,7 @@ jobs:
           VERSION=$(node -p "require('./meta.json').version")
           ZIP="jellybutter_${VERSION}.zip"
           rm -f "${ZIP}"
-          node .forgejo/scripts/make-zip.js "${ZIP}" dist/Jellyfin.Plugin.Jellybutter.dll dist/meta.json
+          node .forgejo/scripts/make-zip.js "${ZIP}" dist/Jellyfin.Plugin.Jellybutter.dll dist/meta.json dist/THIRD-PARTY-NOTICES.txt
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "zip=${ZIP}" >> "$GITHUB_OUTPUT"
           md5sum "${ZIP}"

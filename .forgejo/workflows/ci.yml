@@ -42,6 +42,10 @@ jobs:
         env:
           TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
           API: ${{ github.server_url }}/api/v1/repos/${{ github.repository }}
+          # The host Jellyfin servers download releases from, as written into manifest.json: the Actions
+          # variable PLUGIN_BASE_URL when set (a hostname, so no LAN address lands in the repo), else
+          # the Forgejo URL itself.
+          BASE: ${{ vars.PLUGIN_BASE_URL || github.server_url }}
           VERSION: ${{ steps.package.outputs.version }}
           ZIP: ${{ steps.package.outputs.zip }}
         run: |
@@ -57,7 +61,7 @@ jobs:
             -d "${BODY}" "${API}/releases" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).id")
           curl -sf -X POST -H "Authorization: token ${TOKEN}" \
             -F "attachment=@${ZIP}" "${API}/releases/${RELEASE_ID}/assets?name=${ZIP}" >/dev/null
-          URL="${{ github.server_url }}/${{ github.repository }}/releases/download/${TAG}/${ZIP}"
+          URL="${BASE}/${{ github.repository }}/releases/download/${TAG}/${ZIP}"
           node .forgejo/scripts/update-manifest.js manifest.json meta.json "${ZIP}" "${URL}"
           git config user.name "forgejo-actions"
           git config user.email "actions@noreply.local"

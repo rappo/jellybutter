@@ -94,7 +94,10 @@ run `jellyfin/jellyfin --datadir D --configdir C --cachedir K --logdir L --webdi
    `[skip ci]`. A version that already has a release is skipped, so a push without a bump publishes nothing.
 3. Jellyfin servers that added `.../raw/branch/main/manifest.json` as a repository pick it up.
 
-The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_TOKEN`.
+The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_TOKEN`. The download URLs it
+writes into manifest.json start with the Actions variable `PLUGIN_BASE_URL` when set, else the Forgejo URL:
+set it to a hostname the Jellyfin servers resolve, so no LAN address is committed. Never write a host or IP
+into the repo by hand; docs use `<forgejo-host>`.
 
 ## Behavior to preserve
 

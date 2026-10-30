@@ -505,6 +505,9 @@
             '.jellybutter-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}',
             '.jellybutter-toast{position:absolute;top:1em;left:1em;padding:.5em .9em;background:rgba(0,0,0,.55);color:#fff;border-radius:.5em;font:600 .95em/1.3 sans-serif;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .3s}',
             '.jellybutter-toast.jellybutter-shown{opacity:1}',
+            // Says the lyrics on screen carry no timing, so their stillness reads as intended.
+            '.jellybutter-lyrics-badge{position:absolute;top:1em;right:1em;display:none;padding:.3em .75em;border-radius:1em;background:rgba(0,0,0,.45);color:rgba(255,255,255,.6);font:500 .8em/1.3 sans-serif;pointer-events:none}',
+            '.jellybutter-overlay.jellybutter-lyrics-on.jellybutter-lyrics-unsynced .jellybutter-lyrics-badge{display:block}',
             '.jellybutter-toast small{display:block;font-weight:400;font-size:.75em;color:rgba(255,255,255,.55)}',
             '.jellybutter-controls{position:absolute;right:1em;bottom:calc(1em + var(--jellybutter-bar,0px));display:flex;gap:.3em;opacity:0;transition:opacity .3s}',
             // Shown while the pointer is over the overlay and for a moment after any key, never merely
@@ -613,6 +616,9 @@
         ui.lyrics = document.createElement('div');
         ui.lyrics.className = 'jellybutter-lyrics';
         ui.lyrics.setAttribute('aria-live', 'off');
+        ui.lyricsBadge = document.createElement('div');
+        ui.lyricsBadge.className = 'jellybutter-lyrics-badge';
+        ui.lyricsBadge.textContent = 'Unsynced lyrics';
         ui.toast = document.createElement('div');
         ui.toast.className = 'jellybutter-toast';
         ui.toast.setAttribute('aria-live', 'polite');
@@ -631,6 +637,7 @@
         ui.controls.appendChild(ui.close);
         ui.overlay.appendChild(ui.canvas);
         ui.overlay.appendChild(ui.lyrics);
+        ui.overlay.appendChild(ui.lyricsBadge);
         ui.overlay.appendChild(ui.toast);
         ui.overlay.appendChild(ui.controls);
         ui.overlay.appendChild(buildTvBar());
@@ -1002,6 +1009,7 @@
     }
 
     function lyricsNote(text) {
+        ui.overlay.classList.remove('jellybutter-lyrics-unsynced');
         ui.lyrics.textContent = '';
         state.lyrics.elements = [];
         var note = document.createElement('p');
@@ -1016,6 +1024,7 @@
         if (!id || state.lyrics.itemId === id) { return; }
         state.lyrics.itemId = id;
         state.lyrics.data = null;
+        ui.overlay.classList.remove('jellybutter-lyrics-unsynced');
         ui.lyrics.textContent = '';
         state.lyrics.elements = [];
         var api = window.ApiClient;
@@ -1046,6 +1055,7 @@
         }
         ui.lyrics.textContent = '';
         ui.lyrics.classList.toggle('jellybutter-lyrics-synced', data.synced);
+        ui.overlay.classList.toggle('jellybutter-lyrics-unsynced', !data.synced);
         var holder = document.createElement('div');
         holder.className = data.synced ? 'jellybutter-lyrics-scroll' : 'jellybutter-lyrics-block';
         state.lyrics.elements = data.lines.map(function (line) {

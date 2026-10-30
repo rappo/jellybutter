@@ -21,7 +21,8 @@ repository, updated from there; nothing to install on any client.
   feeds the web client's lyrics page (sidecar `.lrc`/`.txt` files, the LrcLib plugin) feeds this too.
   Synced lyrics follow the music: the current line is large and centered, past lines dimmed above,
   upcoming lines below, with a smooth move on every change. Unsynced lyrics (plain text, no timestamps)
-  cannot follow the music, so they sit still, whole, sized down or set in columns to fit the screen. A
+  cannot follow the music, so they sit still, whole, sized down or set in columns to fit the screen, with
+  an "Unsynced lyrics" badge in the corner. A
   `.lrc` file with `[mm:ss.xx]` times gives synced lyrics. A setting picks whether the visualizer
   opens with or without lyrics; `l` or the Lyrics button toggles them while it is open.
 - The web client's own **Now Playing bar** (artwork, track, artist, playback controls, volume) stays along
@@ -48,7 +49,8 @@ repository, updated from there; nothing to install on any client.
 The one manual step: add the plugin repository to your server.
 
 1. Dashboard > Plugins > Repositories > **+**
-2. Name: `Jellybutter`, URL: `http://argos.lan.rappo.me:3210/rappo/jellybutter/raw/branch/main/manifest.json`
+2. Name: `Jellybutter`, URL: `http://<forgejo-host>/rappo/jellybutter/raw/branch/main/manifest.json`, with
+   the address of the Forgejo that hosts this repository
 3. Dashboard > Plugins > Catalog > **Jellybutter Visualizer** > Install, then restart the server.
 
 Jellyfin checks the repository for updates on its own schedule and installs them like any other plugin.

@@ -6,19 +6,11 @@ repository, updated from there; nothing to install on any client.
 
 ## Screenshots
 
-On a TV (Jellyfin Desktop in the TV layout), with the visualizer's Now Playing bar along the bottom:
-
 ![Synced lyrics over the visualizer on a TV: the current line large and glowing, the Now Playing bar with artwork, track, transport buttons and time along the bottom](docs/screenshots/tv-synced-lyrics.png)
 
 ![Synced lyrics over a darker preset on a TV, with the Now Playing bar](docs/screenshots/tv-synced-lyrics-2.png)
 
 ![A track without lyrics: a dim "No lyrics found" note over the visualizer, with the Now Playing bar](docs/screenshots/tv-no-lyrics.png)
-
-In Jellyfin Desktop on a computer:
-
-![The visualizer full screen in Jellyfin Desktop, with the preset controls at the bottom right](docs/visualizer.png)
-
-![The lyrics view: the current line large and glowing over the visualizer, past lines dimmed above, upcoming lines below](docs/visualizer-lyrics.png)
 
 ## What it does
 

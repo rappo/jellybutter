@@ -16,8 +16,9 @@ Desktop. This file is authoritative for the repo; `CLAUDE.md` only points here.
   `npm ci` once. Never load them from a CDN.
 - **Tests:** xunit (`Jellyfin.Plugin.Jellybutter.Tests`) for the C#; `node:test` (`tests/`) for the script's
   helpers. Both run in CI; the Docker build fails on a red C# suite.
-- **CI/release:** Forgejo Actions on the shared runner image (node + docker CLI, no dotnet, never apt-get).
-  `.forgejo/workflows/ci.yml` builds inside `mcr.microsoft.com/dotnet/sdk:10.0` through the `Dockerfile`.
+- **CI/release:** GitHub Actions (`.github/workflows/ci.yml`, ubuntu-latest, Node 22): JS tests on the
+  runner, then the C# build and tests inside `mcr.microsoft.com/dotnet/sdk:10.0` through the `Dockerfile`.
+  The repository is github.com/rappo/jellybutter; releases and the manifest live there.
 
 ## Layout
 
@@ -47,8 +48,9 @@ Jellyfin.Plugin.Jellybutter/
   Web/jellybutter.js               the client script
 Jellyfin.Plugin.Jellybutter.Tests/ xunit
 tests/                             node:test for jellybutter.js's JellybutterCore
-.forgejo/workflows/ci.yml          build, test, release, manifest
-.forgejo/scripts/update-manifest.js  adds a version (md5, URL, timestamp) to manifest.json
+.github/workflows/ci.yml           build, test, release, manifest
+scripts/make-zip.js                dependency-free zip writer for the release
+scripts/update-manifest.js         adds a version (md5, URL, timestamp) to manifest.json
 ```
 
 ## Build and test
@@ -94,12 +96,13 @@ run `jellyfin/jellyfin --datadir D --configdir C --cachedir K --logdir L --webdi
 2. CI builds, tests, zips `Jellyfin.Plugin.Jellybutter.dll` + `meta.json` + `THIRD-PARTY-NOTICES.txt`,
    creates release `v<version>` with the zip attached, and commits `manifest.json` (md5, download URL, timestamp) back to `main` with
    `[skip ci]`. A version that already has a release is skipped, so a push without a bump publishes nothing.
-3. Jellyfin servers that added `.../raw/branch/main/manifest.json` as a repository pick it up.
+3. Jellyfin servers that added `https://raw.githubusercontent.com/rappo/jellybutter/main/manifest.json` as a
+   repository pick it up.
 
-The release step uses `secrets.RELEASE_TOKEN` when set, else the run's `GITHUB_TOKEN`. The download URLs it
-writes into manifest.json start with the Actions variable `PLUGIN_BASE_URL` when set, else the Forgejo URL:
-set it to a hostname the Jellyfin servers resolve, so no LAN address is committed. Never write a host or IP
-into the repo by hand; docs use `<forgejo-host>`.
+The release step runs `gh` with the run's `GITHUB_TOKEN` (`permissions: contents: write`); the release notes
+are the version's changelog line. Manifest download URLs are
+`https://github.com/rappo/jellybutter/releases/download/v<version>/<zip>`; never put a LAN host or IP in the
+repo.
 
 ## Behavior to preserve
 

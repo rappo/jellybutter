@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Writes a ZIP archive (deflate) from files, with no dependencies: the shared CI runner image has no `zip`.
-//   node make-zip.js <out.zip> <file> [<file>...]      entries are named by basename
+// Writes a ZIP archive (deflate) from files, with no dependencies, so CI needs no `zip` tool.
+//   node scripts/make-zip.js <out.zip> <file> [<file>...]      entries are named by basename
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');

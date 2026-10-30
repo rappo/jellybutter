@@ -61,17 +61,15 @@ In Jellyfin Desktop on a computer:
 The one manual step: add the plugin repository to your server.
 
 1. Dashboard > Plugins > Repositories > **+**
-2. Name: `Jellybutter`, URL: `http://<forgejo-host>/rappo/jellybutter/raw/branch/main/manifest.json`, with
-   the address of the Forgejo that hosts this repository
+2. Name: `Jellybutter`, URL: `https://raw.githubusercontent.com/rappo/jellybutter/main/manifest.json`
 3. Dashboard > Plugins > Catalog > **Jellybutter Visualizer** > Install, then restart the server.
 
 Jellyfin checks the repository for updates on its own schedule and installs them like any other plugin.
 
 Requires Jellyfin 12.2 or later (target ABI 12.2.0.0).
 
-Up to 1.1.0.0 the plugin was called **Milkdrop Visualizer** and lived at `rappo/jellyfin-plugin-milkdrop`. A
-server with the old repository URL keeps updating (Forgejo redirects the old path); 1.2.0.0 copies the old
-settings over on its first start. Point the repository at the URL above when convenient.
+Up to 1.1.0.0 the plugin was called **Milkdrop Visualizer**. It keeps the same plugin id, so Jellyfin treats
+Jellybutter as an update, and 1.2.0.0 copies the old settings over on its first start.
 
 ## Settings
 

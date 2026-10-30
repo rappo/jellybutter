@@ -1,0 +1,83 @@
+# Every push and pull request: JS tests, then C# tests and the publish inside the .NET SDK image (the
+# Dockerfile). On main, when meta.json names a version that has no release yet: zip the plugin, create the
+# GitHub release with the zip attached, and commit the updated manifest.json back to main. That file, served
+# from raw.githubusercontent.com, is the plugin repository Jellyfin servers add.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # make-zip.js uses zlib.crc32 (Node 22.2+).
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install the pinned Butterchurn bundles
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Client script tests
+        run: npm test
+
+      - name: Build, test and publish the plugin (inside the .NET SDK image)
+        run: |
+          rm -rf dist
+          docker build --target artifact -o dist .
+          ls -l dist
+
+      - name: Package
+        id: package
+        run: |
+          VERSION=$(node -p "require('./meta.json').version")
+          ZIP="jellybutter_${VERSION}.zip"
+          rm -f "${ZIP}"
+          node scripts/make-zip.js "${ZIP}" dist/Jellyfin.Plugin.Jellybutter.dll dist/meta.json dist/THIRD-PARTY-NOTICES.txt
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "zip=${ZIP}" >> "$GITHUB_OUTPUT"
+          md5sum "${ZIP}"
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.zip }}
+          path: ${{ steps.package.outputs.zip }}
+
+      - name: Release and update the manifest (main, new version only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.package.outputs.version }}
+          ZIP: ${{ steps.package.outputs.zip }}
+        run: |
+          set -eu
+          TAG="v${VERSION}"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "release ${TAG} exists; bump the version in meta.json to publish a new one"
+            exit 0
+          fi
+          # The release notes are this version's changelog line, without its "<version> - " prefix.
+          NOTES=$(node -p "require('./meta.json').changelog.split('\n')[0].replace(/^[0-9.]+ - /, '')")
+          gh release create "${TAG}" "${ZIP}" --title "Jellybutter ${VERSION}" --notes "${NOTES}" --target "${GITHUB_SHA}"
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${ZIP}"
+          node scripts/update-manifest.js manifest.json meta.json "${ZIP}" "${URL}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "chore(release): ${TAG} in manifest.json [skip ci]" -m "Published by CI: ${URL}"
+          git push origin HEAD:main
